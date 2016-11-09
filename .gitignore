@@ -1,0 +1,7 @@
+# ignore pyton compiled files
+*.pyc
+build-myprog/*
+GPATH
+GRTAGS
+GTAGS
+tags
