@@ -158,6 +158,50 @@ class IEncoder
     EncodeHuffmanMap ch2code;
 };
 
+class IDecoder
+{
+    public:
+        IDecoder() : code2ch{} { }
+
+        void ReadHuffmanTree(iostream& is)
+        {
+            auto var = HuffCode();
+            InnerReadHuffmanTree(var, is);
+        }
+
+        void InnerReadHuffmanTree(const HuffCode& prefix, iostream& is)
+        {
+            char now;
+            if (! is.get(now)) {
+                throw runtime_error("Could not reconstruct tree.");
+            }
+            if (now == '1')
+            {
+                // read letter
+                char data[3];
+                is.read(data, 3);
+                char letter = data[1];
+                // add to map
+                code2ch[prefix] = letter;
+            }
+            else if (now == '0')
+            {
+                HuffCode leftPrefix = prefix;
+                leftPrefix.push_back(false);
+                InnerReadHuffmanTree(leftPrefix, is);
+                HuffCode rightPrefix = prefix;
+                rightPrefix.push_back(true);
+                InnerReadHuffmanTree(rightPrefix, is);
+            }
+        }
+
+    DecodeHuffmanMap code2ch{};
+};
+
+class EncodeShannon : public IEncoder
+{
+
+}
 
 class EncodeHuffman : public IEncoder
 {
@@ -208,47 +252,6 @@ class EncodeHuffman : public IEncoder
             }
         }
 
-};
-
-
-class IDecoder
-{
-    public:
-        IDecoder() : code2ch{} { }
-
-        void ReadHuffmanTree(iostream& is)
-        {
-            auto var = HuffCode();
-            InnerReadHuffmanTree(var, is);
-        }
-
-        void InnerReadHuffmanTree(const HuffCode& prefix, iostream& is)
-        {
-            char now;
-            if (! is.get(now)) {
-                throw runtime_error("Could not reconstruct tree.");
-            }
-            if (now == '1')
-            {
-                // read letter
-                char data[3];
-                is.read(data, 3);
-                char letter = data[1];
-                // add to map
-                code2ch[prefix] = letter;
-            }
-            else if (now == '0')
-            {
-                HuffCode leftPrefix = prefix;
-                leftPrefix.push_back(false);
-                InnerReadHuffmanTree(leftPrefix, is);
-                HuffCode rightPrefix = prefix;
-                rightPrefix.push_back(true);
-                InnerReadHuffmanTree(rightPrefix, is);
-            }
-        }
-
-    DecodeHuffmanMap code2ch{};
 };
 
 class DecodeHuffman : public IDecoder
@@ -311,49 +314,51 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    EncodeHuffman enc{};
+    string encoded
+        = "01-6-001-3-01-1-1-2-01-4-1-5-101010101010101010101011101110111011101110111011100100100100100100100100100100110110110110110110110110110110110110110110110";
     string indata
-      = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
+        = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
+
+    // choose to test encode / decode
     stringstream indatastream{indata};
-    enc.FillFrequencyTable(indatastream);
-    enc.BuildTree();
-    enc.GenerateCodes();
-
-    for (EncodeHuffmanMap::const_iterator it = enc.ch2code.begin(); it != enc.ch2code.end(); ++it)
-    {
-        std::cout << it->first << " ";
-        std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
-        std::cout << std::endl;
-    }
-
+    // stringstream indatastream{encoded};
     stringstream outdatastream{};
-    enc.WriteHuffmanTree(outdatastream);
-    enc.TransformEncode(indatastream, outdatastream);
 
-    DecodeHuffman dec{};
-    dec.ReadHuffmanTree(outdatastream);
-    stringstream decoded{};
-    dec.TransformDecode(outdatastream, decoded);
-    cout << decoded.str() << endl;
 
-    for (DecodeHuffmanMap::const_iterator it = dec.code2ch.begin(); it != dec.code2ch.end(); ++it)
-    {
-        std::cout << it->second << " ";
-        std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
-        std::cout << std::endl;
-    }
 
     // Check for valid combination of options
     // and do the work in each case
     if (algo==ALGORITHM::huffman && infile.find(".txt") != string::npos) {
         // encode with huffman, write name.haff
-        EncodeHuffman enc;
+        EncodeHuffman enc{};
+        enc.FillFrequencyTable(indatastream);
+        enc.BuildTree();
+        enc.GenerateCodes();
+        enc.WriteHuffmanTree(outdatastream);
+        enc.TransformEncode(indatastream, outdatastream);
+        for (EncodeHuffmanMap::const_iterator it = enc.ch2code.begin(); it != enc.ch2code.end(); ++it)
+        {
+            std::cout << it->first << " ";
+            std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
+            std::cout << std::endl;
+        }
+        cout << outdatastream.str() << endl;
     }
     else if (algo==ALGORITHM::shennon && infile.find(".txt") != string::npos) {
         // encode with shennon, write name.shan
     }
     else if (algo==ALGORITHM::huffman && infile.find(".haff") != string::npos) {
         // decode with huffman, write name-unz-h.txt
+        DecodeHuffman dec{};
+        dec.ReadHuffmanTree(indatastream);
+        dec.TransformDecode(indatastream, outdatastream);
+        for (DecodeHuffmanMap::const_iterator it = dec.code2ch.begin(); it != dec.code2ch.end(); ++it)
+        {
+            std::cout << it->second << " ";
+            std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
+            std::cout << std::endl;
+        }
+        cout << outdatastream.str() << endl;
     }
     else if (algo==ALGORITHM::shennon && infile.find(".shan") != string::npos) {
         // decode with shennon, write name-unz-s.txt
