@@ -56,15 +56,21 @@ flags = [
 '-x',
 'c++',
 '-isystem',
-'/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1',
+'/usr/include/c++/6.2.1',
 '-isystem',
-'/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1/x86_64-pc-linux-gnu',
+'/usr/lib/clang/3.8.1/include',
 '-isystem',
-'/usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/6.2.1/../../../../include/c++/6.2.1/backward',
+'/usr/include/c++/6.2.1/x86_64-pc-linux-gnu',
+'-isystem',
+'/usr/include/c++/6.2.1/profile',
+'-isystem',
+'/usr/include/c++/6.2.1/debug',
+'-isystem',
+'/usr/include/c++/6.2.1/backward',
 '-isystem',
 '/usr/local/include',
 '-isystem',
-'/usr/bin/../lib/clang/3.8.1/include',
+'/usr/include',
 '-isystem',
 '/usr/include',
 # a couple local includes
@@ -165,4 +171,4 @@ def FlagsForFile( filename, **kwargs ):
     relative_to = DirectoryOfThisScript()
     final_flags = MakeRelativePathsInFlagsAbsolute( flags, relative_to )
 
-  return { 'flags': final_flags }
+  return { 'flags': final_flags, 'do_cache' : True }
