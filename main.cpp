@@ -62,6 +62,16 @@ public:
     // mark this class as polymorphic, add virtual function
     virtual ~INode() {}
 
+    friend bool operator < (const INode& lhs, const INode& rhs)
+    {
+        return lhs.f > rhs.f;
+    }
+
+    friend bool operator < (const NodePtr& lhs, const NodePtr& rhs)
+    {
+        return lhs->f > rhs->f;
+    }
+
 protected:
     INode(int f) : f(f) {}
 };
@@ -200,32 +210,62 @@ class IDecoder
 
 class EncodeShannon : public IEncoder
 {
-
-}
-
-class EncodeHuffman : public IEncoder
-{
     public:
+        typedef vector<NodePtr> LeafVec;
+        typedef LeafVec::const_iterator LeafIter;
+
+        LeafIter FindBreakingIndex(LeafIter first, LeafIter last)
+        {
+            LeafIter left_ptr = first;
+            LeafIter right_ptr = last;
+            int sumleft = (*left_ptr)->f;
+            int sumright = (*right_ptr)->f;
+            //f func = right - left;
+            // we want abs(func) = 0
+            while (left_ptr+1 < right_ptr) {
+                int func = sumleft - sumright;
+                int valueleft = (*(left_ptr+1))->f;
+                int valueright = (*(right_ptr-1))->f;
+                if (abs(func + valueleft) < abs(func - valueright)) {
+                    sumleft += valueleft;
+                    left_ptr++;
+                }
+                else {
+                    sumright += valueright;
+                    right_ptr--;
+                }
+            }
+            return left_ptr;
+
+        }
+
         void BuildTree()
         {
-            std::priority_queue<NodePtr, std::vector<NodePtr>, NodeCmp> trees;
+            LeafVec leaves;
             for (const auto& stats : table)
             {
                 NodePtr np{new LeafNode{stats.second, stats.first}};
-                trees.push(np);
+                leaves.push_back(np);
             }
-            while (trees.size() > 1)
-            {
-                NodePtr childR = trees.top();
-                trees.pop();
-                NodePtr childL = trees.top();
-                trees.pop();
-                NodePtr parent{new InternalNode{childR, childL}};
-                trees.push(parent);
-            }
-            root = shared_ptr<INode>{trees.top()};
+            sort(leaves.begin(), leaves.end(), NodeCmp{});
+            // start recursion
+            root = InnerBuildTree(leaves.begin(), leaves.end() - 1);
         }
 
+        NodePtr InnerBuildTree(LeafIter first, LeafIter last)
+        {
+            if (distance(first, last) == 0 )
+            {
+                return *first;
+            }
+            else
+            {
+                LeafIter split = FindBreakingIndex(first, last);
+                NodePtr childL = InnerBuildTree(first, split);
+                NodePtr childR = InnerBuildTree(split+1, last);
+                return shared_ptr<INode>{new InternalNode{childL, childR}};
+            }
+        }
 
         void TransformEncode(iostream& is, iostream& os)
         {
@@ -254,7 +294,7 @@ class EncodeHuffman : public IEncoder
 
 };
 
-class DecodeHuffman : public IDecoder
+class DecodeShannon : public IDecoder
 {
     public:
         void TransformDecode(iostream& is, iostream& os)
@@ -314,58 +354,43 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    string encoded
-        = "01-6-001-3-01-1-1-2-01-4-1-5-101010101010101010101011101110111011101110111011100100100100100100100100100100110110110110110110110110110110110110110110110";
     string indata
         = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
 
     // choose to test encode / decode
-    stringstream indatastream{indata};
-    // stringstream indatastream{encoded};
-    stringstream outdatastream{};
+    stringstream rawtext{indata};
+    cout << rawtext.str() << endl;
 
+    stringstream encoded{};
 
+    // encode with huffman, write name.haff
+    EncodeShannon enc{};
+    enc.FillFrequencyTable(rawtext);
+    enc.BuildTree();
+    enc.GenerateCodes();
+    enc.WriteHuffmanTree(encoded);
+    enc.TransformEncode(rawtext, encoded);
+    for (EncodeHuffmanMap::const_iterator it = enc.ch2code.begin(); it != enc.ch2code.end(); ++it)
+    {
+        std::cout << it->first << " ";
+        std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
+        std::cout << std::endl;
+    }
+    cout << encoded.str() << endl;
 
-    // Check for valid combination of options
-    // and do the work in each case
-    if (algo==ALGORITHM::huffman && infile.find(".txt") != string::npos) {
-        // encode with huffman, write name.haff
-        EncodeHuffman enc{};
-        enc.FillFrequencyTable(indatastream);
-        enc.BuildTree();
-        enc.GenerateCodes();
-        enc.WriteHuffmanTree(outdatastream);
-        enc.TransformEncode(indatastream, outdatastream);
-        for (EncodeHuffmanMap::const_iterator it = enc.ch2code.begin(); it != enc.ch2code.end(); ++it)
-        {
-            std::cout << it->first << " ";
-            std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
-            std::cout << std::endl;
-        }
-        cout << outdatastream.str() << endl;
+    stringstream decoded{};
+
+    // decode with huffman, write name-unz-h.txt
+    DecodeShannon dec{};
+    dec.ReadHuffmanTree(encoded);
+    dec.TransformDecode(encoded, decoded);
+    for (DecodeHuffmanMap::const_iterator it = dec.code2ch.begin(); it != dec.code2ch.end(); ++it)
+    {
+        std::cout << it->second << " ";
+        std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
+        std::cout << std::endl;
     }
-    else if (algo==ALGORITHM::shennon && infile.find(".txt") != string::npos) {
-        // encode with shennon, write name.shan
-    }
-    else if (algo==ALGORITHM::huffman && infile.find(".haff") != string::npos) {
-        // decode with huffman, write name-unz-h.txt
-        DecodeHuffman dec{};
-        dec.ReadHuffmanTree(indatastream);
-        dec.TransformDecode(indatastream, outdatastream);
-        for (DecodeHuffmanMap::const_iterator it = dec.code2ch.begin(); it != dec.code2ch.end(); ++it)
-        {
-            std::cout << it->second << " ";
-            std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
-            std::cout << std::endl;
-        }
-        cout << outdatastream.str() << endl;
-    }
-    else if (algo==ALGORITHM::shennon && infile.find(".shan") != string::npos) {
-        // decode with shennon, write name-unz-s.txt
-    }
-    else {
-        cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt) -o output_file" << endl;
-    }
+    cout << decoded.str() << endl;
 
     return 0;
 }
