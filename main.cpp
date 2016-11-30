@@ -10,8 +10,23 @@
 #include <utility>
 #include <queue>
 #include <iterator>
+#include <cstdint>
+#include <codecvt>
+#include <locale>
 
 using namespace std;
+
+using std::locale;
+using std::uint64_t;
+using std::uint32_t;
+using std::uint8_t;
+using std::string;
+using std::vector;
+using std::iostream;
+using std::stringstream;
+using std::shared_ptr;
+using std::dynamic_pointer_cast;
+using std::runtime_error;
 
 class ArgParser
 {
@@ -22,8 +37,8 @@ class ArgParser
             }
         }
 
-        const std::string get_option_value(const std::string &option) const {
-            std::vector<std::string>::const_iterator itr;
+        const string get_option_value(const string &option) const {
+            vector<string>::const_iterator itr;
             itr = std::find(this->tokens.begin(), this->tokens.end(), option);
             if (itr != this->tokens.end() && ++itr != this->tokens.end()){
                 return *itr;
@@ -31,13 +46,13 @@ class ArgParser
             return "";
         }
 
-        bool option_exists(const std::string &option) const{
+        bool option_exists(const string &option) const{
             return std::find(this->tokens.begin(), this->tokens.end(), option)
                 != this->tokens.end();
         }
 
     private:
-        std::vector <std::string> tokens;
+        vector <string> tokens;
 };
 
 enum class ALGORITHM : bool
@@ -46,7 +61,7 @@ enum class ALGORITHM : bool
     shennon = false
 };
 
-typedef std::vector<bool> HuffCode;
+typedef vector<bool> HuffCode;
 typedef std::map<char, HuffCode> EncodeHuffmanMap;
 typedef std::map<HuffCode, char> DecodeHuffmanMap;
 typedef std::map<char,int> FrequencyTable;
@@ -100,13 +115,47 @@ struct NodeCmp
 };
 
 
+class Input {
+public:
+    iostream& ios;
+    bool multibyte;
+
+    Input(iostream& s, bool mb) : ios(s) {
+        multibyte = mb;
+        if (mb) {
+
+        } else {
+
+        }
+    }
+
+    void ReadChar() {
+        if (multibyte) {
+            ReadMultibyte();
+        } else {
+            ReadByte();
+        }
+    }
+
+    void ReadMultibyte() {
+        vector<char32_t> text;
+        char32_t ch;
+        while (ifs.get(ch)) {
+            text.push_back(ch);
+        }
+        ifs.close();
+    }
+
+    void Read
+};
+
 class IEncoder
 {
     public:
-        void FillFrequencyTable(iostream& is) {
+        void FillFrequencyTable(basic_iostream<char32_t>& is) {
             if (is.good()) {
                 // we can continue
-                char ch;
+                char32_t ch;
                 while (is.get(ch)) {
                     ++(this->table)[ch];
                 }
@@ -146,20 +195,59 @@ class IEncoder
 
         void WriteHuffmanTree(iostream& os)
         {
-            InnerWriteHuffmanTree(root, os);
-        }
+            uint64_t n_entries = static_cast<uint64_t>(ch2code.size());
+            // write how many pairs
+            os << n_entries;
 
-        void InnerWriteHuffmanTree(const NodePtr node, iostream& os)
-        {
-            if (const shared_ptr<const LeafNode> lf = dynamic_pointer_cast<const LeafNode>(node))
-            {
-                os << "1-" << lf->c << "-";
+            // find max key length
+            uint64_t max_code_len_bits = -1;
+            for (const auto& entry : ch2code) {
+                if (entry.second.size() > max_code_len_bits) {
+                    max_code_len_bits = entry.second.size();
+                }
             }
-            else if (const shared_ptr<const InternalNode> in = dynamic_pointer_cast<const InternalNode>(node))
-            {
-                os << '0';
-                InnerWriteHuffmanTree(in->left, os);
-                InnerWriteHuffmanTree(in->right, os);
+
+            locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
+            basic_ifstream<char32_t> ifs{"in_test.txt"};
+            ifs.imbue(uft8_aware_locale);
+            vector<char32_t> text;
+            char32_t ch;
+            while (ifs.get(ch)) {
+                text.push_back(ch);
+            }
+            ifs.close();
+            //uint64_t bytes_for_code = (max_code_len_bits/8) + ((max_code_len_bits % 8) ? 1 : 0);
+            //uint64_t bits_for_code = bytes_for_code * 8;
+
+            ofstream ofs{"out_test.txt", ios_base::out | ios_base::binary};
+            wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs2conv;
+
+            cout << "Writing to file (UTF-8)... ";
+            ofs.put('\x59');
+            ofs.flush();
+            for (const auto& ch : text) {
+                ofs.put('\x59');
+                ofs.flush();
+                try {
+                    string bytes = ucs2conv.to_bytes(ch);
+                    ofs << bytes;
+                    ofs.flush();
+                } catch(const std::range_error& e) {
+                    cout << "Error occured\n" << endl;
+                }
+            }
+            cout << "done!\n";
+            ofs.close();
+            for (const auto& entry : ch2code) {
+                w character = entry.first;
+                uint64_t code = 0;
+                uint64_t code_bit_len = entry.second.size();
+                for (uint32_t i=0; i < code_bit_len; i++) {
+                    if (entry.second[code_bit_len - i - 1]) {
+                        code |= (1 << i);
+                    }
+                }
+                os << character << code;
             }
         }
 
@@ -175,6 +263,9 @@ class IDecoder
 
         void ReadHuffmanTree(iostream& is)
         {
+            if (is.good()) {
+
+            }
             auto var = HuffCode();
             InnerReadHuffmanTree(var, is);
         }
@@ -208,6 +299,8 @@ class IDecoder
     DecodeHuffmanMap code2ch{};
 };
 
+class codingstream : public 
+
 class EncodeShannon : public IEncoder
 {
     public:
@@ -239,6 +332,20 @@ class EncodeShannon : public IEncoder
 
         }
 
+        void Encode(basic_iostream<char32_t>& in, basic_iostream<char>& out) {
+            FillFrequencyTable(in);
+            BuildTree();
+            GenerateCodes();
+            WriteHuffmanTree(out);
+            TransformTextEncode(in, out);
+            for (EncodeHuffmanMap::const_iterator it = ch2code.begin(); it != ch2code.end(); ++it)
+            {
+                std::cout << it->first << " ";
+                std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
+                std::cout << std::endl;
+            }
+        }
+
         void BuildTree()
         {
             LeafVec leaves;
@@ -267,11 +374,11 @@ class EncodeShannon : public IEncoder
             }
         }
 
-        void TransformEncode(iostream& is, iostream& os)
+        void TransformTextEncode(basic_iostream<char32_t>& is, basic_iostream<char>& os)
         {
             if (is.good() && os.good()) {
                 // we can continue
-                char in_ch;
+                char32_t in_ch;
                 while (is.get(in_ch))
                 {
                     string code;
@@ -324,6 +431,9 @@ class DecodeShannon : public IDecoder
 
 int main(int argc, char **argv)
 {
+    using std::cout;
+    using std::endl;
+
     // Parse agruments
     bool show_help = false;
     // Check that options are valid
@@ -357,25 +467,26 @@ int main(int argc, char **argv)
     string indata
         = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
 
+
+    std::locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
+    basic_ifstream<char32_t> ifs{"in_test.txt"};
+    ifs.imbue(uft8_aware_locale);
+
+    wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs2conv;
+    try {
+        string bytes = ucs2conv.to_bytes(ch);
+        ofs << bytes;
+        ofs.flush();
+    } catch(const std::range_error& e) { }
     // choose to test encode / decode
-    stringstream rawtext{indata};
+    basic_stringstream<char32_t> rawtext{indata};
+
     cout << rawtext.str() << endl;
 
-    stringstream encoded{};
 
     // encode with huffman, write name.haff
     EncodeShannon enc{};
-    enc.FillFrequencyTable(rawtext);
-    enc.BuildTree();
-    enc.GenerateCodes();
-    enc.WriteHuffmanTree(encoded);
-    enc.TransformEncode(rawtext, encoded);
-    for (EncodeHuffmanMap::const_iterator it = enc.ch2code.begin(); it != enc.ch2code.end(); ++it)
-    {
-        std::cout << it->first << " ";
-        std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
-        std::cout << std::endl;
-    }
+    stringstream encoded = enc.Encode(rawtext);
     cout << encoded.str() << endl;
 
     stringstream decoded{};
