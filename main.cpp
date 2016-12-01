@@ -132,16 +132,18 @@ class ucs4_ofstream : public basic_ofstream<char32_t> {
     }
 };
 
-class bit_istream : public istream, streambuf {
+//=============================================================================
+class bit_ifstream : public ifstream
+{
 public:
-    int nbit;
+    int nbit = 0;
     char bitbuf;
     char charbuf[4];
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
 
-    bit_istream() : istream(this), nbit(8) {};
+    using ifstream::ifstream;
 
-    istream& getutf8char(char32_t& ch) {
+    bit_ifstream& getutf8char(char32_t& ch) {
        read(&charbuf[0], 4);
        try {
            // convert from [first, last) byte in buffer
@@ -159,7 +161,7 @@ public:
        }
     }
 
-    istream& getbit(bool& bit) {
+    bit_ifstream& getbit(bool& bit) {
         if (nbit == 0) {
             get(bitbuf);
             nbit = 8;
@@ -179,15 +181,17 @@ public:
 
 
 
-class bit_ostream : public ostream, streambuf {
+//=============================================================================
+class bit_ofstream : public ofstream
+{
 public:
-    int nbit;
+    int nbit = 8;
     char buffer;
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
 
-    bit_ostream() : ostream(this), nbit(8) {};
+    using ofstream::ofstream;
 
-    ostream& putchar32(char32_t& ch) {
+    bit_ofstream& putchar32(char32_t& ch) {
         try {
             basic_string<char> utf8 = ucs4conv.to_bytes(ch);
             // write(utf8.c_str(), utf8.size());
@@ -202,7 +206,7 @@ public:
         return *this;
     }
 
-    ostream& putbit(bool bit) {
+    bit_ofstream& putbit(bool bit) {
         nbit--;
         if (bit) {
             buffer |= (1 << nbit);
