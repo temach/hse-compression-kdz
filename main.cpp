@@ -149,28 +149,66 @@ class bit_ifstream : public ifstream
 public:
     int nbit = 0;
     char bitbuf;
-    char charbuf[4];
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
 
     using ifstream::ifstream;
 
-    // TODO THIS DOES NOT WORK AT ALL!
-    bit_ifstream& getutf8char(char32_t& ch) {
-        read(&charbuf[0], 4);
+    bit_ifstream& getucs4(char32_t& ch) {
         try {
-            // convert from [first, last) byte in buffer
-            basic_string<char32_t> ucs4
-                = ucs4conv.from_bytes(&charbuf[0], &charbuf[gcount()]);
-            if (ucs4conv.converted() > 0) {
-                ch = *ucs4.begin();
-            } else {
-                cout << "Error!\n" << endl;
-                this->setstate(ios::failbit);
-            }
+            string utf8;
+            getutf8(utf8);
+            basic_string<char32_t> ucs4 = ucs4conv.from_bytes(utf8);
+            ch = *ucs4.begin();
         } catch(const std::range_error& e) {
             cout << "Error!\n" << endl;
             this->setstate(ios::failbit);
         }
+        return *this;
+    }
+
+    // i is the distance from left byte border
+    bool hasbit(char ch, int i) {
+        return ch & (1 << (8-i));
+    }
+
+    bit_ifstream& getutf8(string& utf8) {
+        char firstbyte = '\0';
+        getarray(&firstbyte, 8);
+
+        // examine first byte
+        if (hasbit(firstbyte, 0)) {
+            // if multibyte
+            int nbytes = 0;
+            while (hasbit(firstbyte, nbytes)) {
+                nbytes++;
+            }
+            char utf8_code[nbytes];
+            std::fill(utf8_code, utf8_code+nbytes, 0);
+            utf8_code[0] = firstbyte;
+            getarray(&utf8_code[1], nbytes * 8);
+            utf8.append(&utf8_code[0], nbytes);
+        } else {
+            // if single byte
+            utf8.push_back(firstbyte);
+        }
+        return *this;
+    }
+
+    bit_ifstream& getarray(char* pbuf, int bits) {
+        char* cur = pbuf;
+        int i=0;
+        while (i<bits) {
+            bool bit;
+            getbit(bit);
+            if (bit) {
+                *cur |= (1 << (7 - i%8));
+            }
+            i++;
+            if (i % 8 == 0) {
+                cur++;
+            }
+        }
+        return *this;
     }
 
     bit_ifstream& getbit(bool& bit) {
@@ -179,7 +217,7 @@ public:
             nbit = 8;
         }
         if (*this) {
-            bit = ((bitbuf >> --nbit) & 1) == 1 ? true : false;
+            bit = (bitbuf & (1 << --nbit)) ? true : false;
         }
         return *this;
     }
@@ -499,7 +537,17 @@ int main(int argc, char **argv)
     os.fill_upto_next_byte();
     os.close();
 
-
+    bit_ifstream is{"out_test.txt"};
+    vector<bool> data_2{};
+    for (uint32_t i=0; i < data.size(); i++) {
+        bool b;
+        is.getbit(b);
+        data_2.push_back(b);
+    }
+    char32_t back_rus;
+    is.getucs4(back_rus);
+    is.skip_upto_next_byte();
+    is.close();
 
     return 0;
 }
