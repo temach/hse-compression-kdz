@@ -114,40 +114,114 @@ struct NodeCmp
     bool operator()(const NodePtr lhs, const NodePtr rhs) const { return lhs->f > rhs->f; }
 };
 
+// ifstream f(is, ios::binary | ios::in);
+class ucs4_ifstream : public basic_ifstream<char32_t> {
 
-class Input {
-public:
-    iostream& ios;
-    bool multibyte;
+    locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
 
-    Input(iostream& s, bool mb) : ios(s) {
-        multibyte = mb;
-        if (mb) {
-
-        } else {
-
-        }
+    ucs4_ifstream(string& fname) : basic_ifstream<char32_t>(fname) {
+        imbue(uft8_aware_locale);
     }
-
-    void ReadChar() {
-        if (multibyte) {
-            ReadMultibyte();
-        } else {
-            ReadByte();
-        }
-    }
-
-    void ReadMultibyte() {
-        vector<char32_t> text;
-        char32_t ch;
-        while (ifs.get(ch)) {
-            text.push_back(ch);
-        }
-        ifs.close();
-    }
-
-    void Read
 };
+
+class ucs4_ofstream : public basic_ofstream<char32_t> {
+    locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
+
+    ucs4_ofstream(string& fname) : basic_ofstream<char32_t>(fname) {
+        imbue(uft8_aware_locale);
+    }
+};
+
+class bit_istream : public istream, streambuf {
+public:
+    int nbit;
+    char bitbuf;
+    char charbuf[4];
+    wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
+
+    bit_istream() : istream(this), nbit(8) {};
+
+    istream& getutf8char(char32_t& ch) {
+       read(&charbuf[0], 4);
+       try {
+           // convert from [first, last) byte in buffer
+           basic_string<char32_t> ucs4
+            = ucs4conv.from_bytes(&charbuf[0], &charbuf[gcount()]);
+           if (ucs4conv.converted() > 0) {
+               ch = *ucs4.begin();
+           } else {
+               cout << "Error!\n" << endl;
+               this->setstate(ios::failbit);
+           }
+       } catch(const std::range_error& e) {
+           cout << "Error!\n" << endl;
+           this->setstate(ios::failbit);
+       }
+    }
+
+    istream& getbit(bool& bit) {
+        if (nbit == 0) {
+            get(bitbuf);
+            nbit = 8;
+        }
+        if (*this) {
+            bit = ((bitbuf >> --nbit) & 1) == 1 ? true : false;
+        }
+        return *this;
+    }
+
+    void skip_upto_next_byte() {
+        // discard the rest of unread bitbuf
+        nbit = 0;
+    }
+
+};
+
+
+
+class bit_ostream : public ostream, streambuf {
+public:
+    int nbit;
+    char buffer;
+    wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
+
+    bit_ostream() : ostream(this), nbit(8) {};
+
+    ostream& putchar32(char32_t& ch) {
+        try {
+            basic_string<char> utf8 = ucs4conv.to_bytes(ch);
+            // write(utf8.c_str(), utf8.size());
+            for (const auto& byte : utf8) {
+                put(byte);
+            }
+            flush();
+        } catch(const std::range_error& e) {
+            cout << "Error occured\n" << endl;
+            this->setstate(ios::failbit);
+        }
+        return *this;
+    }
+
+    ostream& putbit(bool bit) {
+        nbit--;
+        if (bit) {
+            buffer |= (1 << nbit);
+        }
+        if (nbit == 0) {
+            put(buffer);
+            flush();
+            nbit = 8;
+        }
+        return *this;
+    }
+
+    void fill_upto_next_byte() {
+        while (nbit != 8) {
+            put(false);
+        }
+    }
+};
+
 
 class IEncoder
 {
@@ -299,8 +373,6 @@ class IDecoder
     DecodeHuffmanMap code2ch{};
 };
 
-class codingstream : public 
-
 class EncodeShannon : public IEncoder
 {
     public:
@@ -434,74 +506,9 @@ int main(int argc, char **argv)
     using std::cout;
     using std::endl;
 
-    // Parse agruments
-    bool show_help = false;
-    // Check that options are valid
-    ArgParser input(argc, argv);
-    if (input.option_exists("-h")) {
-        show_help = true;
-    }
-    // input file
-    const string infile = input.get_option_value("-i");
-    if (infile.empty()) show_help = true;
-    // output file
-    const string outfile = input.get_option_value("-i");
-    if (outfile.empty()) show_help = true;
-    // algorithm name
-    const string alg = input.get_option_value("-a");
-    ALGORITHM algo = ALGORITHM::huffman;
-    if (alg.compare("shennon") == 0) {
-        algo = ALGORITHM::shennon;
-    }
-    else if (alg.compare("huffman") == 0) {
-        algo = ALGORITHM::huffman;
-    }
-    else {
-        show_help = true;
-    }
-    if (show_help) {
-        cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt) -o output_file" << endl;
-        return -1;
-    }
-
-    string indata
-        = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
-
-
     std::locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
     basic_ifstream<char32_t> ifs{"in_test.txt"};
     ifs.imbue(uft8_aware_locale);
-
-    wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs2conv;
-    try {
-        string bytes = ucs2conv.to_bytes(ch);
-        ofs << bytes;
-        ofs.flush();
-    } catch(const std::range_error& e) { }
-    // choose to test encode / decode
-    basic_stringstream<char32_t> rawtext{indata};
-
-    cout << rawtext.str() << endl;
-
-
-    // encode with huffman, write name.haff
-    EncodeShannon enc{};
-    stringstream encoded = enc.Encode(rawtext);
-    cout << encoded.str() << endl;
-
-    stringstream decoded{};
-
-    // decode with huffman, write name-unz-h.txt
-    DecodeShannon dec{};
-    dec.ReadHuffmanTree(encoded);
-    dec.TransformDecode(encoded, decoded);
-    for (DecodeHuffmanMap::const_iterator it = dec.code2ch.begin(); it != dec.code2ch.end(); ++it)
-    {
-        std::cout << it->second << " ";
-        std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
-        std::cout << std::endl;
-    }
-    cout << decoded.str() << endl;
 
     return 0;
 }
