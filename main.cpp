@@ -64,10 +64,10 @@ enum class ALGORITHM : bool
 };
 
 //=============================================================================
-typedef vector<bool> HuffCode;
-typedef std::map<char, HuffCode> EncodeHuffmanMap;
-typedef std::map<HuffCode, char> DecodeHuffmanMap;
-typedef std::map<char,int> FrequencyTable;
+typedef vector<bool> VariableCode;
+typedef std::map<char32_t, VariableCode> EncodeHuffmanMap;
+typedef std::map<VariableCode, char32_t> DecodeMap;
+typedef std::map<char32_t,int> FrequencyTable;
 
 class INode;
 typedef std::shared_ptr<INode> NodePtr;
@@ -110,9 +110,9 @@ public:
 class LeafNode : public INode
 {
 public:
-    const char c;
+    const char32_t c;
 
-    LeafNode(int f, char c) : INode(f), c(c) {}
+    LeafNode(int f, char32_t c) : INode(f), c(c) {}
 };
 
 //=============================================================================
@@ -123,12 +123,12 @@ struct NodeCmp
 
 
 //=============================================================================
-class ucs4_ifstream : public basic_ifstream<char32_t> 
+class ucs4_ifstream : public basic_ifstream<char32_t>
 {
-
+public:
     locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
 
-    ucs4_ifstream(string& fname) : basic_ifstream<char32_t>(fname) {
+    ucs4_ifstream(string& fname) : basic_ifstream<char32_t>{fname} {
         imbue(uft8_aware_locale);
     }
 };
@@ -136,9 +136,10 @@ class ucs4_ifstream : public basic_ifstream<char32_t>
 //=============================================================================
 class ucs4_ofstream : public basic_ofstream<char32_t> 
 {
+public:
     locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
 
-    ucs4_ofstream(string& fname) : basic_ofstream<char32_t>(fname) {
+    ucs4_ofstream(string& fname) : basic_ofstream<char32_t>{fname} {
         imbue(uft8_aware_locale);
     }
 };
@@ -148,10 +149,14 @@ class bit_ifstream : public ifstream
 {
 public:
     int nbit = 0;
+    uint8_t trash_size = 0;
+    bool lastbyte = false;
     char bitbuf;
-    wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
+    wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv{};
 
-    using ifstream::ifstream;
+    bit_ifstream(string& fname) : ifstream{fname, ios::binary | ios::in} {
+        getarray(reinterpret_cast<char*>(&trash_size), 8);
+    }
 
     bit_ifstream& getucs4(char32_t& ch) {
         try {
@@ -215,9 +220,13 @@ public:
         if (nbit == 0) {
             get(bitbuf);
             nbit = 8;
+            lastbyte = (peek() == EOF);
         }
-        if (*this) {
+        // disregard the last trash_size bits in the last byte
+        if ((! lastbyte) || (lastbyte && nbit > trash_size)) {
             bit = (bitbuf & (1 << --nbit)) ? true : false;
+        } else {
+            this->setstate(ios::eofbit);
         }
         return *this;
     }
@@ -254,12 +263,12 @@ public:
         return *this;
     }
 
-    bit_ofstream& pututf8(string utf8) {
+    bit_ofstream& pututf8(const string& utf8) {
         putarray(utf8.c_str(), utf8.size() * 8);
         return *this;
     }
 
-    bit_ofstream& putchar32(char32_t& ch) {
+    bit_ofstream& putchar32(const char32_t& ch) {
         try {
             basic_string<char> utf8 = ucs4conv.to_bytes(ch);
             pututf8(utf8);
@@ -270,7 +279,7 @@ public:
         return *this;
     }
 
-    bit_ofstream& putbit(bool bit) {
+    bit_ofstream& putbit(const bool bit) {
         nbit--;
         if (bit) {
             buffer |= (1 << nbit);
@@ -284,10 +293,17 @@ public:
         return *this;
     }
 
-    void fill_upto_next_byte() {
+    void end_writing() {
+        // remember the trash size
+        char trash_size = 8 - nbit;
+        // write trash
         while (nbit != 8) {
             putbit(false);
         }
+        // rewind
+        seekp(0, ios::beg);
+        // write the trash size
+        putarray(&trash_size, 8);
     }
 };
 
@@ -296,11 +312,31 @@ public:
 class IEncoder
 {
     public:
+
+        void Encode(ucs4_ifstream& in, bit_ofstream& out) {
+            FillFrequencyTable(in);
+            BuildTree();
+            GenerateCodes();
+            WriteTree(out);
+            TransformTextEncode(in, out);
+            // Write some debug info
+            for (EncodeHuffmanMap::const_iterator it = ch2code.begin(); it != ch2code.end(); ++it)
+            {
+                std::cout << it->first << " ";
+                std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
+                std::cout << std::endl;
+            }
+        }
+
+    protected:
+
         shared_ptr<INode> root;
         FrequencyTable table;
-        EncodeHuffmanMap ch2code;
 
-        void FillFrequencyTable(basic_iostream<char32_t>& is) {
+        virtual void BuildTree() = 0;
+
+        void FillFrequencyTable(ucs4_ifstream& is) {
+            // write the trash size
             if (is.good()) {
                 // we can continue
                 char32_t ch;
@@ -321,10 +357,10 @@ class IEncoder
 
         void GenerateCodes()
         {
-            InnerGenerateCodes(root, HuffCode{});
+            InnerGenerateCodes(root, VariableCode{});
         }
 
-        void InnerGenerateCodes(const NodePtr node, const HuffCode& prefix)
+        void InnerGenerateCodes(const NodePtr node, const VariableCode& prefix)
         {
             if (const shared_ptr<const LeafNode> lf = dynamic_pointer_cast<const LeafNode>(node))
             {
@@ -332,86 +368,99 @@ class IEncoder
             }
             else if (const shared_ptr<const InternalNode> in = dynamic_pointer_cast<const InternalNode>(node))
             {
-                HuffCode leftPrefix = prefix;
+                VariableCode leftPrefix = prefix;
                 leftPrefix.push_back(false);
                 InnerGenerateCodes(in->left, leftPrefix);
-                HuffCode rightPrefix = prefix;
+                VariableCode rightPrefix = prefix;
                 rightPrefix.push_back(true);
                 InnerGenerateCodes(in->right, rightPrefix);
             }
         }
 
-        void WriteHuffmanTree(bit_ostream& os)
+        void WriteTree(bit_ofstream& os)
         {
-            InnerWriteHuffmanTree(root, os);
+            InnerWriteTree(root, os);
         }
 
-        void InnerWriteHuffmanTree(const NodePtr node, iostream& os)
+        void InnerWriteTree(const NodePtr node, bit_ofstream& os)
         {
             if (const shared_ptr<const LeafNode> lf = dynamic_pointer_cast<const LeafNode>(node))
             {
-                os << "1-" << lf->c << "-";
+                os.putbit(true);
+                os.putchar32(lf->c);
             }
             else if (const shared_ptr<const InternalNode> in = dynamic_pointer_cast<const InternalNode>(node))
             {
-                os << '0';
-                InnerWriteHuffmanTree(in->left, os);
-                InnerWriteHuffmanTree(in->right, os);
+                os.putbit(false);
+                InnerWriteTree(in->left, os);
+                InnerWriteTree(in->right, os);
             }
         }
 
-    shared_ptr<INode> root;
-    FrequencyTable table;
-    EncodeHuffmanMap ch2code;
-};
-
-//=============================================================================
-class IDecoder
-{
-    public:
-        IDecoder() : code2ch{} { }
-
-        void ReadHuffmanTree(iostream& is)
+        void TransformTextEncode(ucs4_ifstream& is, bit_ofstream& os)
         {
-            auto var = HuffCode();
-            InnerReadHuffmanTree(var, is);
-        }
-
-        void InnerReadHuffmanTree(const HuffCode& prefix, iostream& is)
-        {
-            char now;
-            if (! is.get(now)) {
-                throw runtime_error("Could not reconstruct tree.");
-            }
-            if (now == '1')
-            {
-                // read letter
-                char data[3];
-                is.read(data, 3);
-                char letter = data[1];
-                // add to map
-                code2ch[prefix] = letter;
-            }
-            else if (now == '0')
-            {
-                HuffCode leftPrefix = prefix;
-                leftPrefix.push_back(false);
-                InnerReadHuffmanTree(leftPrefix, is);
-                HuffCode rightPrefix = prefix;
-                rightPrefix.push_back(true);
-                InnerReadHuffmanTree(rightPrefix, is);
+            if (is.good() && os.good()) {
+                // we can continue
+                char32_t in_ch;
+                while (is.get(in_ch))
+                {
+                    for (const auto& bit : this->ch2code[in_ch]) {
+                        os.putbit(bit);
+                    }
+                }
+                if (is.eof()) {
+                    // clear eof and rewind input stream
+                    is.clear();
+                    is.seekg(0, std::ios::beg);
+                } else {
+                    // we stopped reading the file, but it is not EOF yet.
+                    throw std::runtime_error("Could not encode");
+                }
+                // we reached eof. all ok
             }
         }
 
-    DecodeHuffmanMap code2ch{};
+    private:
+        EncodeHuffmanMap ch2code;
 };
 
 //=============================================================================
 class EncodeShannon : public IEncoder
 {
+    typedef vector<NodePtr> LeafVec;
+    typedef LeafVec::const_iterator LeafIter;
+
     public:
-        typedef vector<NodePtr> LeafVec;
-        typedef LeafVec::const_iterator LeafIter;
+
+        virtual void BuildTree() override
+        {
+            LeafVec leaves;
+            for (const auto& stats : table)
+            {
+                NodePtr np{new LeafNode{stats.second, stats.first}};
+                leaves.push_back(np);
+            }
+            sort(leaves.begin(), leaves.end(), NodeCmp{});
+            // start recursion
+            root = InnerBuildTree(leaves.begin(), leaves.end() - 1);
+        }
+
+    protected:
+
+        NodePtr InnerBuildTree(LeafIter first, LeafIter last)
+        {
+            if (distance(first, last) == 0 )
+            {
+                return *first;
+            }
+            else
+            {
+                LeafIter split = FindBreakingIndex(first, last);
+                NodePtr childL = InnerBuildTree(first, split);
+                NodePtr childR = InnerBuildTree(split+1, last);
+                return shared_ptr<INode>{new InternalNode{childL, childR}};
+            }
+        }
 
         LeafIter FindBreakingIndex(LeafIter first, LeafIter last)
         {
@@ -438,89 +487,69 @@ class EncodeShannon : public IEncoder
 
         }
 
-        void Encode(basic_iostream<char32_t>& in, basic_iostream<char>& out) {
-            FillFrequencyTable(in);
-            BuildTree();
-            GenerateCodes();
-            WriteHuffmanTree(out);
-            TransformTextEncode(in, out);
-            for (EncodeHuffmanMap::const_iterator it = ch2code.begin(); it != ch2code.end(); ++it)
+};
+
+//=============================================================================
+class Decoder
+{
+    public:
+        void ReadTree(bit_ifstream& is)
+        {
+            auto var = VariableCode();
+            InnerReadTree(var, is);
+        }
+
+        void Decode(bit_ifstream& is, ucs4_ofstream& os) {
+            ReadTree(is);
+            TransformDecode(is, os);
+            for (DecodeMap::const_iterator it = code2ch.begin(); it != code2ch.end(); ++it)
             {
-                std::cout << it->first << " ";
-                std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
+                std::cout << it->second << " ";
+                std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
                 std::cout << std::endl;
             }
         }
 
-        void BuildTree()
-        {
-            LeafVec leaves;
-            for (const auto& stats : table)
-            {
-                NodePtr np{new LeafNode{stats.second, stats.first}};
-                leaves.push_back(np);
-            }
-            sort(leaves.begin(), leaves.end(), NodeCmp{});
-            // start recursion
-            root = InnerBuildTree(leaves.begin(), leaves.end() - 1);
-        }
+    protected:
 
-        NodePtr InnerBuildTree(LeafIter first, LeafIter last)
+        DecodeMap code2ch{};
+
+        void InnerReadTree(const VariableCode& prefix, bit_ifstream& is)
         {
-            if (distance(first, last) == 0 )
+            if (! is.good()) {
+                throw runtime_error("Could not reconstruct tree.");
+            }
+            bool bit;
+            is.getbit(bit);
+            if (bit)
             {
-                return *first;
+                // read letter
+                char32_t ch;
+                is.getucs4(ch);
+                // add to map
+                code2ch[prefix] = ch;
             }
             else
             {
-                LeafIter split = FindBreakingIndex(first, last);
-                NodePtr childL = InnerBuildTree(first, split);
-                NodePtr childR = InnerBuildTree(split+1, last);
-                return shared_ptr<INode>{new InternalNode{childL, childR}};
+                VariableCode leftPrefix = prefix;
+                leftPrefix.push_back(false);
+                InnerReadTree(leftPrefix, is);
+                VariableCode rightPrefix = prefix;
+                rightPrefix.push_back(true);
+                InnerReadTree(rightPrefix, is);
             }
         }
 
-        void TransformTextEncode(basic_iostream<char32_t>& is, basic_iostream<char>& os)
+        void TransformDecode(bit_ifstream& is, ucs4_ofstream& os)
         {
             if (is.good() && os.good()) {
                 // we can continue
-                char32_t in_ch;
-                while (is.get(in_ch))
+                bool bit;
+                VariableCode code{};
+                while (is.getbit(bit))
                 {
-                    string code;
-                    for (const auto& bit : this->ch2code[in_ch]) {
-                        code += bit ? "1" : "0";
-                    }
-                    os << code;
-                }
-                if (is.eof()) {
-                    // clear eof and rewind input stream
-                    is.clear();
-                    is.seekg(0, std::ios::beg);
-                } else {
-                    // we stopped reading the file, but it is not EOF yet.
-                    throw std::runtime_error("Could not encode");
-                }
-                // we reached eof. all ok
-            }
-        }
-
-};
-
-//=============================================================================
-class DecodeShannon : public IDecoder
-{
-    public:
-        void TransformDecode(iostream& is, iostream& os)
-        {
-            if (is.good() && os.good()) {
-                // we can continue
-                char in_ch;
-                HuffCode code{};
-                while (is.get(in_ch))
-                {
-                    code.push_back(in_ch=='1' ? true : false);
-                    if(code2ch.find(code) != code2ch.end()) {
+                    code.push_back(bit);
+                    if (code2ch.find(code) != code2ch.end()) {
                         os << code2ch[code];
                         code.clear();
                     }
@@ -532,9 +561,11 @@ class DecodeShannon : public IDecoder
                 // we reached eof. all ok
             }
         }
-
 };
 
+
+
+// TODO GENERATE INVALID CODE FOR THE BIT_IFSTREAM SO THAT THE DECODER KNOWS WHEN TO STOP
 //=============================================================================
 int main(int argc, char **argv)
 {
@@ -569,63 +600,53 @@ int main(int argc, char **argv)
         cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt) -o output_file" << endl;
         return -1;
     }
-    cout << encoded.str() << endl;
 
     string indata
         = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
 
-    bit_ofstream os{"out_test.txt"};
+    string fraw = "rawtext.txt";
+    string fencoded = "encoded.txt";
+    string fdecoded = "decoded.txt";
+
+    // encode with huffman, write name.haff
+    ucs4_ifstream rawtext{fraw};
+    bit_ofstream outs{fencoded, ios::binary | ios::out};
+    EncodeShannon enc{};
+    enc.Encode(rawtext, outs);
+    rawtext.close();
+    outs.close();
+
+    // decode with huffman, write name-unz-h.txt
+    bit_ifstream enc_stream{fencoded};
+    ucs4_ofstream dec_stream{fdecoded};
+    Decoder dec{};
+    dec.Decode(enc_stream, dec_stream);
+    enc_stream.close();
+    dec_stream.close();
+
+    // test binary reader writer
+    string out = "out_test.txt";
+    bit_ofstream os{out};
     vector<bool> data = {true, false, true, false, false, false, false, true, true};
     for (const auto& b : data) {
         os.putbit(b);
-    // choose to test encode / decode
-    stringstream rawtext{indata};
-    cout << rawtext.str() << endl;
-
-    stringstream encoded{};
-
-    // encode with huffman, write name.haff
-    EncodeShannon enc{};
-    enc.FillFrequencyTable(rawtext);
-    enc.BuildTree();
-    enc.GenerateCodes();
-    enc.WriteHuffmanTreeStr(encoded);
-    enc.TransformEncodeStr(rawtext, encoded);
-    for (EncodeHuffmanMap::const_iterator it = enc.ch2code.begin(); it != enc.ch2code.end(); ++it)
-    {
-        std::cout << it->first << " ";
-        std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
-        std::cout << std::endl;
     }
-
     char32_t rus = L'д';
     os.putchar32(rus);
-    os.fill_upto_next_byte();
+    os.end_writing();
     os.close();
 
-    bit_ifstream is{"out_test.txt"};
+    bit_ifstream is{out};
     vector<bool> data_2{};
     for (uint32_t i=0; i < data.size(); i++) {
         bool b;
         is.getbit(b);
         data_2.push_back(b);
-    stringstream decoded{};
-
-    // decode with huffman, write name-unz-h.txt
-    DecodeShannon dec{};
-    dec.ReadHuffmanTreeStr(encoded);
-    dec.TransformDecodeStr(encoded, decoded);
-    for (DecodeHuffmanMap::const_iterator it = dec.code2ch.begin(); it != dec.code2ch.end(); ++it)
-    {
-        std::cout << it->second << " ";
-        std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
-        std::cout << std::endl;
     }
     char32_t back_rus;
     is.getucs4(back_rus);
     is.skip_upto_next_byte();
     is.close();
-    cout << decoded.str() << endl;
 
     return 0;
 }
