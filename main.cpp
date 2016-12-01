@@ -198,7 +198,7 @@ class bit_ofstream : public ofstream
 {
 public:
     int nbit = 8;
-    char buffer;
+    char buffer = '\0';
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
 
     using ofstream::ofstream;
@@ -207,16 +207,18 @@ public:
         const char* cur = data;
         int i=0;
         while (i<bits) {
-            putbit(*cur << (8 - (i%8)));
+            putbit( *cur & (1 << (7-(i%8))) );
             i++;
             if (i % 8 == 0) {
                 cur++;
             }
         }
+        return *this;
     }
 
     bit_ofstream& pututf8(string utf8) {
         putarray(utf8.c_str(), utf8.size() * 8);
+        return *this;
     }
 
     bit_ofstream& putchar32(char32_t& ch) {
@@ -239,13 +241,14 @@ public:
             put(buffer);
             flush();
             nbit = 8;
+            buffer = '\0';
         }
         return *this;
     }
 
     void fill_upto_next_byte() {
         while (nbit != 8) {
-            put(false);
+            putbit(false);
         }
     }
 };
@@ -485,9 +488,18 @@ int main(int argc, char **argv)
     using std::cout;
     using std::endl;
 
-    std::locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
-    basic_ifstream<char32_t> ifs{"in_test.txt"};
-    ifs.imbue(uft8_aware_locale);
+    bit_ofstream os{"out_test.txt"};
+    vector<bool> data = {true, false, true, false, false, false, false, true, true};
+    for (const auto& b : data) {
+        os.putbit(b);
+    }
+
+    char32_t rus = L'д';
+    os.putchar32(rus);
+    os.fill_upto_next_byte();
+    os.close();
+
+
 
     return 0;
 }
