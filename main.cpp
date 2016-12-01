@@ -28,6 +28,7 @@ using std::shared_ptr;
 using std::dynamic_pointer_cast;
 using std::runtime_error;
 
+//=============================================================================
 class ArgParser
 {
     public:
@@ -55,12 +56,14 @@ class ArgParser
         vector <string> tokens;
 };
 
+//=============================================================================
 enum class ALGORITHM : bool
 {
     huffman = true,
     shennon = false
 };
 
+//=============================================================================
 typedef vector<bool> HuffCode;
 typedef std::map<char, HuffCode> EncodeHuffmanMap;
 typedef std::map<HuffCode, char> DecodeHuffmanMap;
@@ -69,6 +72,7 @@ typedef std::map<char,int> FrequencyTable;
 class INode;
 typedef std::shared_ptr<INode> NodePtr;
 
+//=============================================================================
 class INode
 {
 public:
@@ -92,6 +96,7 @@ protected:
 };
 
 
+//=============================================================================
 class InternalNode : public INode
 {
 public:
@@ -101,6 +106,7 @@ public:
     InternalNode(NodePtr c0, NodePtr c1) : INode(c0->f + c1->f), left(c0), right(c1) {}
 };
 
+//=============================================================================
 class LeafNode : public INode
 {
 public:
@@ -109,13 +115,16 @@ public:
     LeafNode(int f, char c) : INode(f), c(c) {}
 };
 
+//=============================================================================
 struct NodeCmp
 {
     bool operator()(const NodePtr lhs, const NodePtr rhs) const { return lhs->f > rhs->f; }
 };
 
-// ifstream f(is, ios::binary | ios::in);
-class ucs4_ifstream : public basic_ifstream<char32_t> {
+
+//=============================================================================
+class ucs4_ifstream : public basic_ifstream<char32_t> 
+{
 
     locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
 
@@ -124,7 +133,9 @@ class ucs4_ifstream : public basic_ifstream<char32_t> {
     }
 };
 
-class ucs4_ofstream : public basic_ofstream<char32_t> {
+//=============================================================================
+class ucs4_ofstream : public basic_ofstream<char32_t> 
+{
     locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
 
     ucs4_ofstream(string& fname) : basic_ofstream<char32_t>(fname) {
@@ -132,7 +143,9 @@ class ucs4_ofstream : public basic_ofstream<char32_t> {
     }
 };
 
-class bit_istream : public istream, streambuf {
+//=============================================================================
+class bit_istream : public istream, streambuf 
+{
 public:
     int nbit;
     char bitbuf;
@@ -179,7 +192,9 @@ public:
 
 
 
-class bit_ostream : public ostream, streambuf {
+//=============================================================================
+class bit_ostream : public ostream, streambuf
+{
 public:
     int nbit;
     char buffer;
@@ -223,9 +238,14 @@ public:
 };
 
 
+//=============================================================================
 class IEncoder
 {
     public:
+        shared_ptr<INode> root;
+        FrequencyTable table;
+        EncodeHuffmanMap ch2code;
+
         void FillFrequencyTable(basic_iostream<char32_t>& is) {
             if (is.good()) {
                 // we can continue
@@ -267,69 +287,28 @@ class IEncoder
             }
         }
 
-        void WriteHuffmanTree(iostream& os)
+        void WriteHuffmanTree(bit_ostream& os)
         {
             uint64_t n_entries = static_cast<uint64_t>(ch2code.size());
             // write how many pairs
             os << n_entries;
-
-            // find max key length
-            uint64_t max_code_len_bits = -1;
             for (const auto& entry : ch2code) {
-                if (entry.second.size() > max_code_len_bits) {
-                    max_code_len_bits = entry.second.size();
-                }
-            }
-
-            locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
-            basic_ifstream<char32_t> ifs{"in_test.txt"};
-            ifs.imbue(uft8_aware_locale);
-            vector<char32_t> text;
-            char32_t ch;
-            while (ifs.get(ch)) {
-                text.push_back(ch);
-            }
-            ifs.close();
-            //uint64_t bytes_for_code = (max_code_len_bits/8) + ((max_code_len_bits % 8) ? 1 : 0);
-            //uint64_t bits_for_code = bytes_for_code * 8;
-
-            ofstream ofs{"out_test.txt", ios_base::out | ios_base::binary};
-            wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs2conv;
-
-            cout << "Writing to file (UTF-8)... ";
-            ofs.put('\x59');
-            ofs.flush();
-            for (const auto& ch : text) {
-                ofs.put('\x59');
-                ofs.flush();
-                try {
-                    string bytes = ucs2conv.to_bytes(ch);
-                    ofs << bytes;
-                    ofs.flush();
-                } catch(const std::range_error& e) {
-                    cout << "Error occured\n" << endl;
-                }
-            }
-            cout << "done!\n";
-            ofs.close();
-            for (const auto& entry : ch2code) {
-                w character = entry.first;
+                char32_t character = entry.first;
                 uint64_t code = 0;
-                uint64_t code_bit_len = entry.second.size();
-                for (uint32_t i=0; i < code_bit_len; i++) {
+                // this is <=64
+                int code_bit_len = entry.second.size();
+                for (int i=0; i < code_bit_len; i++) {
                     if (entry.second[code_bit_len - i - 1]) {
                         code |= (1 << i);
                     }
                 }
-                os << character << code;
+                os.put
+                os << code << character;
             }
         }
-
-    shared_ptr<INode> root;
-    FrequencyTable table;
-    EncodeHuffmanMap ch2code;
 };
 
+//=============================================================================
 class IDecoder
 {
     public:
@@ -373,6 +352,7 @@ class IDecoder
     DecodeHuffmanMap code2ch{};
 };
 
+//=============================================================================
 class EncodeShannon : public IEncoder
 {
     public:
@@ -473,6 +453,7 @@ class EncodeShannon : public IEncoder
 
 };
 
+//=============================================================================
 class DecodeShannon : public IDecoder
 {
     public:
@@ -500,7 +481,7 @@ class DecodeShannon : public IDecoder
 
 };
 
-
+//=============================================================================
 int main(int argc, char **argv)
 {
     using std::cout;
@@ -512,7 +493,3 @@ int main(int argc, char **argv)
 
     return 0;
 }
-
-
-
-
