@@ -128,7 +128,9 @@ class ucs4_ifstream : public basic_ifstream<char32_t>
 public:
     locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
 
-    ucs4_ifstream(string& fname) : basic_ifstream<char32_t>{fname} {
+    using basic_ifstream<char32_t>::basic_ifstream;
+
+    ucs4_ifstream(string& fname) : basic_ifstream<char32_t>(fname, ios::binary | ios::out) {
         imbue(uft8_aware_locale);
     }
 };
@@ -139,7 +141,9 @@ class ucs4_ofstream : public basic_ofstream<char32_t>
 public:
     locale uft8_aware_locale{std::locale(), new std::codecvt_utf8<char32_t>};
 
-    ucs4_ofstream(string& fname) : basic_ofstream<char32_t>{fname} {
+    using basic_ofstream<char32_t>::basic_ofstream;
+
+    ucs4_ofstream(string& fname) : basic_ofstream<char32_t>(fname, ios::binary | ios::out) {
         imbue(uft8_aware_locale);
     }
 };
@@ -154,7 +158,7 @@ public:
     char bitbuf;
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv{};
 
-    bit_ifstream(string& fname) : ifstream(fname, ios::binary | ios::in) {
+    bit_ifstream(const string& fname) : ifstream(fname, ios::binary | ios::in) {
         getarray(reinterpret_cast<char*>(&trash_size), 8);
     }
 
@@ -173,7 +177,7 @@ public:
 
     // i is the distance from left byte border
     bool hasbit(char ch, int i) {
-        return ch & (1 << (8-i));
+        return ch & (1 << (7-i));
     }
 
     bit_ifstream& getutf8(string& utf8) {
@@ -190,7 +194,7 @@ public:
             char utf8_code[nbytes];
             std::fill(utf8_code, utf8_code+nbytes, 0);
             utf8_code[0] = firstbyte;
-            getarray(&utf8_code[1], nbytes * 8);
+            getarray(&utf8_code[1], (nbytes-1) * 8);
             utf8.append(&utf8_code[0], nbytes);
         } else {
             // if single byte
@@ -226,8 +230,13 @@ public:
             }
         }
         // disregard the last trash_size bits in the last byte
-        if ((! lastbyte) || (lastbyte && nbit > trash_size)) {
+        if (! lastbyte) {
             bit = (bitbuf & (1 << --nbit)) ? true : false;
+        } else if (lastbyte && nbit > trash_size) {
+            bit = (bitbuf & (1 << --nbit)) ? true : false;
+            if (nbit == 0) {
+                setstate(ios::eofbit);
+            }
         } else {
             setstate(ios::eofbit);
         }
@@ -246,7 +255,9 @@ public:
     char buffer = '\0';
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
 
-    using ofstream::ofstream;
+    bit_ofstream(const string& fname) : ofstream(fname, ios::binary | ios::out) {
+        start_writing();
+    }
 
     bit_ofstream& putarray(const char* data, int bits) {
         const char* cur = data;
@@ -337,6 +348,7 @@ class IEncoder
         shared_ptr<INode> root;
         FrequencyTable table;
 
+        // mark the class as polymorphic, add virtual function
         virtual void BuildTree() = 0;
 
         void FillFrequencyTable(ucs4_ifstream& is) {
@@ -344,7 +356,7 @@ class IEncoder
             if (is.good()) {
                 // we can continue
                 char32_t ch;
-                while (is.get(ch)) {
+                while (is.get(ch).good()) {
                     ++(this->table)[ch];
                 }
                 if (is.eof()) {
@@ -406,7 +418,7 @@ class IEncoder
             if (is.good() && os.good()) {
                 // we can continue
                 char32_t in_ch;
-                while (is.get(in_ch))
+                while (is.get(in_ch).good())
                 {
                     for (const auto& bit : this->ch2code[in_ch]) {
                         os.putbit(bit);
@@ -550,7 +562,7 @@ class Decoder
                 // we can continue
                 bool bit;
                 VariableCode code{};
-                while (is.getbit(bit))
+                while (is.getbit(bit).good())
                 {
                     code.push_back(bit);
                     if (code2ch.find(code) != code2ch.end()) {
@@ -604,8 +616,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    string indata
-        = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
+    // string indata = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
 
     string fraw = "rawtext.txt";
     string fencoded = "encoded.txt";
@@ -613,10 +624,11 @@ int main(int argc, char **argv)
 
     // encode with huffman, write name.haff
     ucs4_ifstream rawtext{fraw};
-    bit_ofstream outs{fencoded, ios::binary | ios::out};
+    bit_ofstream outs{fencoded};
     EncodeShannon enc{};
     enc.Encode(rawtext, outs);
     rawtext.close();
+    outs.stop_writing();
     outs.close();
 
     // decode with huffman, write name-unz-h.txt
@@ -626,35 +638,6 @@ int main(int argc, char **argv)
     dec.Decode(enc_stream, dec_stream);
     enc_stream.close();
     dec_stream.close();
-
-    // test binary reader writer
-    string out = "out_test.txt";
-    bit_ofstream os{out};
-    os.start_writing();
-    vector<bool> data = {true, false, true, false, false, false, false, true, true};
-    for (const auto& b : data) {
-        os.putbit(b);
-    }
-    char32_t rus = L'д';
-    os.putchar32(rus);
-    os.stop_writing();
-    os.close();
-
-    bit_ifstream is{out};
-    vector<bool> data_2{};
-    for (uint32_t i=0; i < data.size(); i++) {
-        bool b;
-        is.getbit(b);
-        data_2.push_back(b);
-    }
-    vector<bool> all{};
-    bool b;
-    while (is.getbit(b).good()) {
-        all.push_back(b);
-    }
-    //char32_t back_rus;
-    //is.getucs4(back_rus);
-    is.close();
 
     return 0;
 }
