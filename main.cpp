@@ -154,22 +154,23 @@ public:
 
     using ifstream::ifstream;
 
+    // TODO THIS DOES NOT WORK AT ALL!
     bit_ifstream& getutf8char(char32_t& ch) {
-       read(&charbuf[0], 4);
-       try {
-           // convert from [first, last) byte in buffer
-           basic_string<char32_t> ucs4
-            = ucs4conv.from_bytes(&charbuf[0], &charbuf[gcount()]);
-           if (ucs4conv.converted() > 0) {
-               ch = *ucs4.begin();
-           } else {
-               cout << "Error!\n" << endl;
-               this->setstate(ios::failbit);
-           }
-       } catch(const std::range_error& e) {
-           cout << "Error!\n" << endl;
-           this->setstate(ios::failbit);
-       }
+        read(&charbuf[0], 4);
+        try {
+            // convert from [first, last) byte in buffer
+            basic_string<char32_t> ucs4
+                = ucs4conv.from_bytes(&charbuf[0], &charbuf[gcount()]);
+            if (ucs4conv.converted() > 0) {
+                ch = *ucs4.begin();
+            } else {
+                cout << "Error!\n" << endl;
+                this->setstate(ios::failbit);
+            }
+        } catch(const std::range_error& e) {
+            cout << "Error!\n" << endl;
+            this->setstate(ios::failbit);
+        }
     }
 
     bit_ifstream& getbit(bool& bit) {
@@ -202,14 +203,26 @@ public:
 
     using ofstream::ofstream;
 
+    bit_ofstream& putarray(const char* data, int bits) {
+        const char* cur = data;
+        int i=0;
+        while (i<bits) {
+            putbit(*cur << (8 - (i%8)));
+            i++;
+            if (i % 8 == 0) {
+                cur++;
+            }
+        }
+    }
+
+    bit_ofstream& pututf8(string utf8) {
+        putarray(utf8.c_str(), utf8.size() * 8);
+    }
+
     bit_ofstream& putchar32(char32_t& ch) {
         try {
             basic_string<char> utf8 = ucs4conv.to_bytes(ch);
-            // write(utf8.c_str(), utf8.size());
-            for (const auto& byte : utf8) {
-                put(byte);
-            }
-            flush();
+            pututf8(utf8);
         } catch(const std::range_error& e) {
             cout << "Error occured\n" << endl;
             this->setstate(ios::failbit);
@@ -289,22 +302,7 @@ class IEncoder
 
         void WriteHuffmanTree(bit_ostream& os)
         {
-            uint64_t n_entries = static_cast<uint64_t>(ch2code.size());
-            // write how many pairs
-            os << n_entries;
-            for (const auto& entry : ch2code) {
-                char32_t character = entry.first;
-                uint64_t code = 0;
-                // this is <=64
-                int code_bit_len = entry.second.size();
-                for (int i=0; i < code_bit_len; i++) {
-                    if (entry.second[code_bit_len - i - 1]) {
-                        code |= (1 << i);
-                    }
-                }
-                os.put
-                os << code << character;
-            }
+
         }
 };
 
