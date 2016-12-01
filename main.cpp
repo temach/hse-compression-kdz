@@ -154,7 +154,7 @@ public:
     char bitbuf;
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv{};
 
-    bit_ifstream(string& fname) : ifstream{fname, ios::binary | ios::in} {
+    bit_ifstream(string& fname) : ifstream(fname, ios::binary | ios::in) {
         getarray(reinterpret_cast<char*>(&trash_size), 8);
     }
 
@@ -220,20 +220,18 @@ public:
         if (nbit == 0) {
             get(bitbuf);
             nbit = 8;
-            lastbyte = (peek() == EOF);
+            if (peek() == EOF) {
+                lastbyte = true;
+                clear();
+            }
         }
         // disregard the last trash_size bits in the last byte
         if ((! lastbyte) || (lastbyte && nbit > trash_size)) {
             bit = (bitbuf & (1 << --nbit)) ? true : false;
         } else {
-            this->setstate(ios::eofbit);
+            setstate(ios::eofbit);
         }
         return *this;
-    }
-
-    void skip_upto_next_byte() {
-        // discard the rest of unread bitbuf
-        nbit = 0;
     }
 
 };
@@ -293,9 +291,15 @@ public:
         return *this;
     }
 
-    void end_writing() {
+    void start_writing() {
+        // write an empty byte, which will get overriden in stop_writing()
+        put('\0');
+        flush();
+    }
+
+    void stop_writing() {
         // remember the trash size
-        char trash_size = 8 - nbit;
+        char trash_size = nbit;
         // write trash
         while (nbit != 8) {
             putbit(false);
@@ -565,7 +569,6 @@ class Decoder
 
 
 
-// TODO GENERATE INVALID CODE FOR THE BIT_IFSTREAM SO THAT THE DECODER KNOWS WHEN TO STOP
 //=============================================================================
 int main(int argc, char **argv)
 {
@@ -627,13 +630,14 @@ int main(int argc, char **argv)
     // test binary reader writer
     string out = "out_test.txt";
     bit_ofstream os{out};
+    os.start_writing();
     vector<bool> data = {true, false, true, false, false, false, false, true, true};
     for (const auto& b : data) {
         os.putbit(b);
     }
     char32_t rus = L'д';
     os.putchar32(rus);
-    os.end_writing();
+    os.stop_writing();
     os.close();
 
     bit_ifstream is{out};
@@ -643,9 +647,13 @@ int main(int argc, char **argv)
         is.getbit(b);
         data_2.push_back(b);
     }
-    char32_t back_rus;
-    is.getucs4(back_rus);
-    is.skip_upto_next_byte();
+    vector<bool> all{};
+    bool b;
+    while (is.getbit(b).good()) {
+        all.push_back(b);
+    }
+    //char32_t back_rus;
+    //is.getucs4(back_rus);
     is.close();
 
     return 0;
