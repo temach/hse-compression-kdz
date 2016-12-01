@@ -343,8 +343,26 @@ class IEncoder
 
         void WriteHuffmanTree(bit_ostream& os)
         {
-
+            InnerWriteHuffmanTree(root, os);
         }
+
+        void InnerWriteHuffmanTree(const NodePtr node, iostream& os)
+        {
+            if (const shared_ptr<const LeafNode> lf = dynamic_pointer_cast<const LeafNode>(node))
+            {
+                os << "1-" << lf->c << "-";
+            }
+            else if (const shared_ptr<const InternalNode> in = dynamic_pointer_cast<const InternalNode>(node))
+            {
+                os << '0';
+                InnerWriteHuffmanTree(in->left, os);
+                InnerWriteHuffmanTree(in->right, os);
+            }
+        }
+
+    shared_ptr<INode> root;
+    FrequencyTable table;
+    EncodeHuffmanMap ch2code;
 };
 
 //=============================================================================
@@ -355,9 +373,6 @@ class IDecoder
 
         void ReadHuffmanTree(iostream& is)
         {
-            if (is.good()) {
-
-            }
             auto var = HuffCode();
             InnerReadHuffmanTree(var, is);
         }
@@ -525,11 +540,62 @@ int main(int argc, char **argv)
 {
     using std::cout;
     using std::endl;
+    // Parse agruments
+    bool show_help = false;
+    // Check that options are valid
+    ArgParser input(argc, argv);
+    if (input.option_exists("-h")) {
+        show_help = true;
+    }
+    // input file
+    const string infile = input.get_option_value("-i");
+    if (infile.empty()) show_help = true;
+    // output file
+    const string outfile = input.get_option_value("-i");
+    if (outfile.empty()) show_help = true;
+    // algorithm name
+    const string alg = input.get_option_value("-a");
+    ALGORITHM algo = ALGORITHM::huffman;
+    if (alg.compare("shennon") == 0) {
+        algo = ALGORITHM::shennon;
+    }
+    else if (alg.compare("huffman") == 0) {
+        algo = ALGORITHM::huffman;
+    }
+    else {
+        show_help = true;
+    }
+    if (show_help) {
+        cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt) -o output_file" << endl;
+        return -1;
+    }
+    cout << encoded.str() << endl;
+
+    string indata
+        = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
 
     bit_ofstream os{"out_test.txt"};
     vector<bool> data = {true, false, true, false, false, false, false, true, true};
     for (const auto& b : data) {
         os.putbit(b);
+    // choose to test encode / decode
+    stringstream rawtext{indata};
+    cout << rawtext.str() << endl;
+
+    stringstream encoded{};
+
+    // encode with huffman, write name.haff
+    EncodeShannon enc{};
+    enc.FillFrequencyTable(rawtext);
+    enc.BuildTree();
+    enc.GenerateCodes();
+    enc.WriteHuffmanTreeStr(encoded);
+    enc.TransformEncodeStr(rawtext, encoded);
+    for (EncodeHuffmanMap::const_iterator it = enc.ch2code.begin(); it != enc.ch2code.end(); ++it)
+    {
+        std::cout << it->first << " ";
+        std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
+        std::cout << std::endl;
     }
 
     char32_t rus = L'д';
@@ -543,11 +609,23 @@ int main(int argc, char **argv)
         bool b;
         is.getbit(b);
         data_2.push_back(b);
+    stringstream decoded{};
+
+    // decode with huffman, write name-unz-h.txt
+    DecodeShannon dec{};
+    dec.ReadHuffmanTreeStr(encoded);
+    dec.TransformDecodeStr(encoded, decoded);
+    for (DecodeHuffmanMap::const_iterator it = dec.code2ch.begin(); it != dec.code2ch.end(); ++it)
+    {
+        std::cout << it->second << " ";
+        std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
+        std::cout << std::endl;
     }
     char32_t back_rus;
     is.getucs4(back_rus);
     is.skip_upto_next_byte();
     is.close();
+    cout << decoded.str() << endl;
 
     return 0;
 }
