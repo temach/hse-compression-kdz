@@ -441,6 +441,31 @@ class IEncoder
 };
 
 //=============================================================================
+class EncodeHuffman : public IEncoder 
+{
+public:
+    void BuildTree()
+    {
+        std::priority_queue<NodePtr, std::vector<NodePtr>, NodeCmp> trees;
+        for (const auto& stats : table)
+        {
+            NodePtr np{new LeafNode{stats.second, stats.first}};
+            trees.push(np);
+        }
+        while (trees.size() > 1)
+        {
+            NodePtr childR = trees.top();
+            trees.pop();
+            NodePtr childL = trees.top();
+            trees.pop();
+            NodePtr parent{new InternalNode{childR, childL}};
+            trees.push(parent);
+        }
+        root = shared_ptr<INode>{trees.top()};
+    }
+};
+
+//=============================================================================
 class EncodeShannon : public IEncoder
 {
     typedef vector<NodePtr> LeafVec;
@@ -500,9 +525,7 @@ class EncodeShannon : public IEncoder
                 }
             }
             return left_ptr;
-
         }
-
 };
 
 //=============================================================================
@@ -596,9 +619,6 @@ int main(int argc, char **argv)
     // input file
     const string infile = input.get_option_value("-i");
     if (infile.empty()) show_help = true;
-    // output file
-    const string outfile = input.get_option_value("-i");
-    if (outfile.empty()) show_help = true;
     // algorithm name
     const string alg = input.get_option_value("-a");
     ALGORITHM algo = ALGORITHM::huffman;
@@ -612,32 +632,65 @@ int main(int argc, char **argv)
         show_help = true;
     }
     if (show_help) {
-        cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt) -o output_file" << endl;
+        cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt)" << endl;
         return -1;
     }
 
-    // string indata = "1111122222223333333333444444444444444555555555555555555555666666666666666666666666666666666666666666666";
+    string name = infile;
+    string::size_type ext_txt = infile.find(".txt");
+    string::size_type ext_haff = infile.find(".haff");
+    string::size_type ext_shan = infile.find(".shan");
 
-    string fraw = "rawtext.txt";
-    string fencoded = "encoded.txt";
-    string fdecoded = "decoded.txt";
-
-    // encode with huffman, write name.haff
-    ucs4_ifstream rawtext{fraw};
-    bit_ofstream outs{fencoded};
-    EncodeShannon enc{};
-    enc.Encode(rawtext, outs);
-    rawtext.close();
-    outs.stop_writing();
-    outs.close();
-
-    // decode with huffman, write name-unz-h.txt
-    bit_ifstream enc_stream{fencoded};
-    ucs4_ofstream dec_stream{fdecoded};
-    Decoder dec{};
-    dec.Decode(enc_stream, dec_stream);
-    enc_stream.close();
-    dec_stream.close();
-
+    // Check for valid combination of options
+    // and do the work in each case
+    if (algo==ALGORITHM::huffman && infile.find(".txt") != string::npos) {
+        name.erase(ext_txt, 4);
+        string fout = name + ".haff";
+        // encode with huffman, write name.haff
+        ucs4_ifstream rawtext{infile};
+        bit_ofstream outs{fout};
+        EncodeShannon enc{};
+        enc.Encode(rawtext, outs);
+        rawtext.close();
+        outs.stop_writing();
+        outs.close();
+    }
+    else if (algo==ALGORITHM::shennon && infile.find(".txt") != string::npos) {
+        name.erase(ext_txt, 4);
+        string fout = name + ".shan";
+        // encode with shennon, write name.shan
+        ucs4_ifstream rawtext{infile};
+        bit_ofstream outs{fout};
+        EncodeShannon enc{};
+        enc.Encode(rawtext, outs);
+        rawtext.close();
+        outs.stop_writing();
+        outs.close();
+    }
+    else if (algo==ALGORITHM::huffman && infile.find(".haff") != string::npos) {
+        name.erase(ext_haff, 5);
+        string fout = name + "-unz-h.txt";
+        // decode with huffman, write name-unz-h.txt
+        bit_ifstream enc_stream{infile};
+        ucs4_ofstream dec_stream{fout};
+        Decoder dec{};
+        dec.Decode(enc_stream, dec_stream);
+        enc_stream.close();
+        dec_stream.close();
+    }
+    else if (algo==ALGORITHM::shennon && infile.find(".shan") != string::npos) {
+        name.erase(ext_shan, 5);
+        string fout = name + "-unz-s.txt";
+        // decode with shennon, write name-unz-s.txt
+        bit_ifstream enc_stream{infile};
+        ucs4_ofstream dec_stream{fout};
+        Decoder dec{};
+        dec.Decode(enc_stream, dec_stream);
+        enc_stream.close();
+        dec_stream.close();
+    }
+    else {
+        cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt)" << endl;
+    }
     return 0;
 }
