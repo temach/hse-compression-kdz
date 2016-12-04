@@ -733,7 +733,7 @@ int main(int argc, char **argv)
         ops.add(4);
         ucs4_ifstream rawtext{infile};
         bit_ofstream outs{fout};
-        EncodeShannon enc{};
+        EncodeHuffman enc{};
         enc.Encode(rawtext, outs);
         rawtext.close();
         outs.stop_writing();
