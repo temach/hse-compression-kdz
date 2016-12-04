@@ -81,11 +81,6 @@ public:
     // mark this class as polymorphic, add virtual function
     virtual ~INode() {}
 
-    friend bool operator < (const INode& lhs, const INode& rhs)
-    {
-        return lhs.f > rhs.f;
-    }
-
     friend bool operator < (const NodePtr& lhs, const NodePtr& rhs)
     {
         return lhs->f > rhs->f;
@@ -295,7 +290,6 @@ public:
         }
         if (nbit == 0) {
             put(buffer);
-            flush();
             nbit = 8;
             buffer = '\0';
         }
@@ -305,7 +299,6 @@ public:
     void start_writing() {
         // write an empty byte, which will get overriden in stop_writing()
         put('\0');
-        flush();
     }
 
     void stop_writing() {
@@ -334,13 +327,6 @@ class IEncoder
             GenerateCodes();
             WriteTree(out);
             TransformTextEncode(in, out);
-            // Write some debug info
-            for (EncodeHuffmanMap::const_iterator it = ch2code.begin(); it != ch2code.end(); ++it)
-            {
-                std::cout << it->first << " ";
-                std::copy(it->second.begin(), it->second.end(), std::ostream_iterator<bool>(std::cout));
-                std::cout << std::endl;
-            }
         }
 
     protected:
@@ -509,8 +495,8 @@ class EncodeShannon : public IEncoder
             LeafIter right_ptr = last;
             int sumleft = (*left_ptr)->f;
             int sumright = (*right_ptr)->f;
-            //f func = right - left;
-            // we want abs(func) = 0
+            // func = right - left;
+            // we want abs(func) to be 0 (minimal possible)
             while (left_ptr+1 < right_ptr) {
                 int func = sumleft - sumright;
                 int valueleft = (*(left_ptr+1))->f;
@@ -541,12 +527,6 @@ class Decoder
         void Decode(bit_ifstream& is, ucs4_ofstream& os) {
             ReadTree(is);
             TransformDecode(is, os);
-            for (DecodeMap::const_iterator it = code2ch.begin(); it != code2ch.end(); ++it)
-            {
-                std::cout << it->second << " ";
-                std::copy(it->first.begin(), it->first.end(), std::ostream_iterator<bool>(std::cout));
-                std::cout << std::endl;
-            }
         }
 
     protected:
