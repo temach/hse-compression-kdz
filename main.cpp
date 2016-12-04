@@ -41,7 +41,7 @@ public:
     void reset() {
         operations = 0;
     }
-} ops; // <- global variable
+} ops{}; // <- global variable
 
 
 //=============================================================================
@@ -738,6 +738,10 @@ int main(int argc, char **argv)
         rawtext.close();
         outs.stop_writing();
         outs.close();
+        // write operations
+        ofstream result{fout + ".ops"};
+        result << ops.operations;
+        result.close();
     }
     else if (algo==ALGORITHM::shennon && infile.find(".txt") != string::npos) {
         name.erase(ext_txt, 4);
@@ -751,6 +755,10 @@ int main(int argc, char **argv)
         rawtext.close();
         outs.stop_writing();
         outs.close();
+        // write operations
+        ofstream result{fout + ".ops"};
+        result << ops.operations;
+        result.close();
     }
     else if (algo==ALGORITHM::huffman && infile.find(".haff") != string::npos) {
         name.erase(ext_haff, 5);
@@ -763,6 +771,10 @@ int main(int argc, char **argv)
         dec.Decode(enc_stream, dec_stream);
         enc_stream.close();
         dec_stream.close();
+        // write operations
+        ofstream result{fout + ".ops"};
+        result << ops.operations;
+        result.close();
     }
     else if (algo==ALGORITHM::shennon && infile.find(".shan") != string::npos) {
         name.erase(ext_shan, 5);
@@ -775,6 +787,10 @@ int main(int argc, char **argv)
         dec.Decode(enc_stream, dec_stream);
         enc_stream.close();
         dec_stream.close();
+        // write operations
+        ofstream result{fout + ".ops"};
+        result << ops.operations;
+        result.close();
     }
     else {
         cout << "Usage: program -a (huffman || shennon) -i input_file(.haff || .shan || .txt)" << endl;
