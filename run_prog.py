@@ -3,6 +3,8 @@ from os.path import isfile, join, abspath, basename
 import subprocess
 import pdb
 
+datapath = abspath("./inputs")
+
 def is_ops(f):
     return ".ops" in f
 
@@ -19,26 +21,32 @@ def is_shan(f):
 def is_unz_shan(f):
     return "-unz-s.txt" in f and not is_ops(f)
 
+def get_file_list(condition):
+    ret = []
+    for f in listdir(datapath):
+        p = join(datapath, f)
+        if (isfile(p) and condition(f)):
+            ret.append(p)
+    return ret
 
-datapath = abspath("./inputs")
 
-textfiles = []
-for f in listdir(datapath):
-    p = join(datapath, f)
-    if (isfile(p) and is_txt(f)):
-        textfiles.append(p)
-
+# encode everything
+textfiles = get_file_list(is_txt)
 for f in textfiles:
     for enc in ["shennon", "huffman"]:
         x = subprocess.run(["./build-myprog/myprog", "-a", enc, "-i", f], stdout=subprocess.PIPE)
 
-encoded = [f for f in listdir(datapath) if isfile(join(datapath, f)) and (is_haff(f) or is_shan(f))]
+# decode what you encoded
+def cond_encoded(f):
+    return is_haff(f) or is_shan(f)
+encoded = get_file_list(cond_encoded)
 for f in encoded:
     enc = "huffman"
     if is_shan(f):
         enc = "shennon"
     x = subprocess.run(["./build-myprog/myprog", "-a", enc, "-i", f], stdout=subprocess.PIPE)
 
+# extra safety check
 for f in textfiles:
     x1 = subprocess.run(["diff", f, f + "-unz-s.txt"], stdout=subprocess.PIPE)
     x2 = subprocess.run(["diff", f, f + "-unz-h.txt"], stdout=subprocess.PIPE)
