@@ -20,6 +20,7 @@ using std::locale;
 using std::uint64_t;
 using std::uint32_t;
 using std::uint8_t;
+using std::int64_t;
 using std::string;
 using std::vector;
 using std::iostream;
@@ -27,6 +28,21 @@ using std::stringstream;
 using std::shared_ptr;
 using std::dynamic_pointer_cast;
 using std::runtime_error;
+
+
+class OpsCounter {
+public:
+    uint64_t operations = 0;
+
+    void add(int64_t new_ops) {
+        operations += new_ops;
+    }
+
+    void reset() {
+        operations = 0;
+    }
+} ops; // <- global variable
+
 
 //=============================================================================
 class ArgParser
@@ -83,6 +99,7 @@ public:
 
     friend bool operator < (const NodePtr& lhs, const NodePtr& rhs)
     {
+        ops.add(2);
         return lhs->f > rhs->f;
     }
 
@@ -113,7 +130,10 @@ public:
 //=============================================================================
 struct NodeCmp
 {
-    bool operator()(const NodePtr lhs, const NodePtr rhs) const { return lhs->f > rhs->f; }
+    bool operator()(const NodePtr lhs, const NodePtr rhs) const {
+        ops.add(2);
+        return lhs->f > rhs->f;
+    }
 };
 
 
@@ -154,36 +174,46 @@ public:
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv{};
 
     bit_ifstream(const string& fname) : ifstream(fname, ios::binary | ios::in) {
+        // plus initialisation
+        ops.add(5);
         getarray(reinterpret_cast<char*>(&trash_size), 8);
     }
 
     bit_ifstream& getucs4(char32_t& ch) {
         try {
+            ops.add(3);
             string utf8;
             getutf8(utf8);
             basic_string<char32_t> ucs4 = ucs4conv.from_bytes(utf8);
             ch = *ucs4.begin();
         } catch(const std::range_error& e) {
+            ops.add(1);
             cout << "Error!\n" << endl;
+            ops.add(1);
             this->setstate(ios::failbit);
         }
+        ops.add(1);
         return *this;
     }
 
     // i is the distance from left byte border
     bool hasbit(char ch, int i) {
+        ops.add(3);
         return ch & (1 << (7-i));
     }
 
     bit_ifstream& getutf8(string& utf8) {
+        ops.add(2);
         char firstbyte = '\0';
         getarray(&firstbyte, 8);
-
         // examine first byte
+        ops.add(2);
         if (hasbit(firstbyte, 0)) {
             // if multibyte
+            ops.add(7);
             int nbytes = 0;
             while (hasbit(firstbyte, nbytes)) {
+                ops.add(1);
                 nbytes++;
             }
             char utf8_code[nbytes];
@@ -193,22 +223,27 @@ public:
             utf8.append(&utf8_code[0], nbytes);
         } else {
             // if single byte
+            ops.add(1);
             utf8.push_back(firstbyte);
         }
         return *this;
     }
 
     bit_ifstream& getarray(char* pbuf, int bits) {
+        ops.add(3);
         char* cur = pbuf;
         int i=0;
         while (i<bits) {
+            ops.add(4);
             bool bit;
             getbit(bit);
             if (bit) {
+                ops.add(4);
                 *cur |= (1 << (7 - i%8));
             }
             i++;
             if (i % 8 == 0) {
+                ops.add(1);
                 cur++;
             }
         }
@@ -216,23 +251,30 @@ public:
     }
 
     bit_ifstream& getbit(bool& bit) {
+        ops.add(2);
         if (nbit == 0) {
+            ops.add(3);
             get(bitbuf);
             nbit = 8;
             if (peek() == EOF) {
+                ops.add(2);
                 lastbyte = true;
                 clear();
             }
         }
         // disregard the last trash_size bits in the last byte
         if (! lastbyte) {
+            ops.add(4);
             bit = (bitbuf & (1 << --nbit)) ? true : false;
         } else if (lastbyte && nbit > trash_size) {
+            ops.add(4);
             bit = (bitbuf & (1 << --nbit)) ? true : false;
             if (nbit == 0) {
+                ops.add(1);
                 setstate(ios::eofbit);
             }
         } else {
+            ops.add(1);
             setstate(ios::eofbit);
         }
         return *this;
@@ -251,16 +293,21 @@ public:
     wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;
 
     bit_ofstream(const string& fname) : ofstream(fname, ios::binary | ios::out) {
+        // plus initialisation
+        ops.add(3);
         start_writing();
     }
 
     bit_ofstream& putarray(const char* data, int bits) {
+        ops.add(3);
         const char* cur = data;
         int i=0;
         while (i<bits) {
+            ops.add(7);
             putbit( *cur & (1 << (7-(i%8))) );
             i++;
             if (i % 8 == 0) {
+                ops.add(1);
                 cur++;
             }
         }
@@ -268,15 +315,19 @@ public:
     }
 
     bit_ofstream& pututf8(const string& utf8) {
+        ops.add(4);
         putarray(utf8.c_str(), utf8.size() * 8);
         return *this;
     }
 
     bit_ofstream& putchar32(const char32_t& ch) {
+        ops.add(1);
         try {
+            ops.add(3);
             basic_string<char> utf8 = ucs4conv.to_bytes(ch);
             pututf8(utf8);
         } catch(const std::range_error& e) {
+            ops.add(2);
             cout << "Error occured\n" << endl;
             this->setstate(ios::failbit);
         }
@@ -284,11 +335,14 @@ public:
     }
 
     bit_ofstream& putbit(const bool bit) {
+        ops.add(2);
         nbit--;
         if (bit) {
+            ops.add(2);
             buffer |= (1 << nbit);
         }
         if (nbit == 0) {
+            ops.add(3);
             put(buffer);
             nbit = 8;
             buffer = '\0';
@@ -298,14 +352,17 @@ public:
 
     void start_writing() {
         // write an empty byte, which will get overriden in stop_writing()
+        ops.add(1);
         put('\0');
     }
 
     void stop_writing() {
         // remember the trash size
+        ops.add(3);
         char trash_size = nbit;
         // write trash
         while (nbit != 8) {
+            ops.add(1);
             putbit(false);
         }
         // rewind
@@ -322,6 +379,7 @@ class IEncoder
     public:
 
         void Encode(ucs4_ifstream& in, bit_ofstream& out) {
+            ops.add(5);
             FillFrequencyTable(in);
             BuildTree();
             GenerateCodes();
@@ -338,19 +396,25 @@ class IEncoder
         virtual void BuildTree() = 0;
 
         void FillFrequencyTable(ucs4_ifstream& is) {
+            ops.add(1);
             // write the trash size
             if (is.good()) {
                 // we can continue
                 char32_t ch;
+                ops.add(2);
                 while (is.get(ch).good()) {
+                    ops.add(2);
                     ++(this->table)[ch];
                 }
+                ops.add(1);
                 if (is.eof()) {
                     // clear eof and rewind input stream
+                    ops.add(2);
                     is.clear();
                     is.seekg(0, std::ios::beg);
                 } else {
                     // we stopped reading the file, but it is not EOF yet.
+                    ops.add(1);
                     throw std::runtime_error("Could not read file");
                 }
                 // we reached eof. all ok
@@ -359,6 +423,7 @@ class IEncoder
 
         void GenerateCodes()
         {
+            ops.add(1);
             InnerGenerateCodes(root, VariableCode{});
         }
 
@@ -366,10 +431,12 @@ class IEncoder
         {
             if (const shared_ptr<const LeafNode> lf = dynamic_pointer_cast<const LeafNode>(node))
             {
+                ops.add(2);
                 this->ch2code[lf->c] = prefix;
             }
             else if (const shared_ptr<const InternalNode> in = dynamic_pointer_cast<const InternalNode>(node))
             {
+                ops.add(6);
                 VariableCode leftPrefix = prefix;
                 leftPrefix.push_back(false);
                 InnerGenerateCodes(in->left, leftPrefix);
@@ -381,6 +448,7 @@ class IEncoder
 
         void WriteTree(bit_ofstream& os)
         {
+            ops.add(1);
             InnerWriteTree(root, os);
         }
 
@@ -388,11 +456,13 @@ class IEncoder
         {
             if (const shared_ptr<const LeafNode> lf = dynamic_pointer_cast<const LeafNode>(node))
             {
+                ops.add(2);
                 os.putbit(true);
                 os.putchar32(lf->c);
             }
             else if (const shared_ptr<const InternalNode> in = dynamic_pointer_cast<const InternalNode>(node))
             {
+                ops.add(3);
                 os.putbit(false);
                 InnerWriteTree(in->left, os);
                 InnerWriteTree(in->right, os);
@@ -401,21 +471,27 @@ class IEncoder
 
         void TransformTextEncode(ucs4_ifstream& is, bit_ofstream& os)
         {
+            ops.add(2);
             if (is.good() && os.good()) {
                 // we can continue
                 char32_t in_ch;
+                ops.add(2);
                 while (is.get(in_ch).good())
                 {
                     for (const auto& bit : this->ch2code[in_ch]) {
+                        ops.add(2);
                         os.putbit(bit);
                     }
                 }
+                ops.add(1);
                 if (is.eof()) {
                     // clear eof and rewind input stream
+                    ops.add(2);
                     is.clear();
                     is.seekg(0, std::ios::beg);
                 } else {
                     // we stopped reading the file, but it is not EOF yet.
+                    ops.add(1);
                     throw std::runtime_error("Could not encode");
                 }
                 // we reached eof. all ok
@@ -435,18 +511,22 @@ public:
         std::priority_queue<NodePtr, std::vector<NodePtr>, NodeCmp> trees;
         for (const auto& stats : table)
         {
+            ops.add(2);
             NodePtr np{new LeafNode{stats.second, stats.first}};
             trees.push(np);
         }
         while (trees.size() > 1)
         {
+            ops.add(7);
             NodePtr childR = trees.top();
             trees.pop();
             NodePtr childL = trees.top();
             trees.pop();
+            // Internal node constructor also requiers +1 ops
             NodePtr parent{new InternalNode{childR, childL}};
             trees.push(parent);
         }
+        ops.add(2);
         root = shared_ptr<INode>{trees.top()};
     }
 };
@@ -464,11 +544,14 @@ class EncodeShannon : public IEncoder
             LeafVec leaves;
             for (const auto& stats : table)
             {
+                ops.add(2);
                 NodePtr np{new LeafNode{stats.second, stats.first}};
                 leaves.push_back(np);
             }
+            ops.add(1);
             sort(leaves.begin(), leaves.end(), NodeCmp{});
             // start recursion
+            ops.add(2);
             root = InnerBuildTree(leaves.begin(), leaves.end() - 1);
         }
 
@@ -476,21 +559,26 @@ class EncodeShannon : public IEncoder
 
         NodePtr InnerBuildTree(LeafIter first, LeafIter last)
         {
+            ops.add(1);
             if (distance(first, last) == 0 )
             {
+                ops.add(1);
                 return *first;
             }
             else
             {
+                ops.add(8);
                 LeafIter split = FindBreakingIndex(first, last);
                 NodePtr childL = InnerBuildTree(first, split);
                 NodePtr childR = InnerBuildTree(split+1, last);
+                // Internal node constructor also requiers +1 ops
                 return shared_ptr<INode>{new InternalNode{childL, childR}};
             }
         }
 
         LeafIter FindBreakingIndex(LeafIter first, LeafIter last)
         {
+            ops.add(6);
             LeafIter left_ptr = first;
             LeafIter right_ptr = last;
             int sumleft = (*left_ptr)->f;
@@ -498,14 +586,17 @@ class EncodeShannon : public IEncoder
             // func = right - left;
             // we want abs(func) to be 0 (minimal possible)
             while (left_ptr+1 < right_ptr) {
+                ops.add(10);
                 int func = sumleft - sumright;
                 int valueleft = (*(left_ptr+1))->f;
                 int valueright = (*(right_ptr-1))->f;
                 if (abs(func + valueleft) < abs(func - valueright)) {
+                    ops.add(2);
                     sumleft += valueleft;
                     left_ptr++;
                 }
                 else {
+                    ops.add(2);
                     sumright += valueright;
                     right_ptr--;
                 }
@@ -520,11 +611,13 @@ class Decoder
     public:
         void ReadTree(bit_ifstream& is)
         {
+            ops.add(2);
             auto var = VariableCode();
             InnerReadTree(var, is);
         }
 
         void Decode(bit_ifstream& is, ucs4_ofstream& os) {
+            ops.add(2);
             ReadTree(is);
             TransformDecode(is, os);
         }
@@ -535,14 +628,17 @@ class Decoder
 
         void InnerReadTree(const VariableCode& prefix, bit_ifstream& is)
         {
+            ops.add(1);
             if (! is.good()) {
                 throw runtime_error("Could not reconstruct tree.");
             }
             bool bit;
+            ops.add(1);
             is.getbit(bit);
             if (bit)
             {
                 // read letter
+                ops.add(3);
                 char32_t ch;
                 is.getucs4(ch);
                 // add to map
@@ -550,6 +646,7 @@ class Decoder
             }
             else
             {
+                ops.add(6);
                 VariableCode leftPrefix = prefix;
                 leftPrefix.push_back(false);
                 InnerReadTree(leftPrefix, is);
@@ -561,20 +658,26 @@ class Decoder
 
         void TransformDecode(bit_ifstream& is, ucs4_ofstream& os)
         {
+            ops.add(2);
             if (is.good() && os.good()) {
                 // we can continue
                 bool bit;
                 VariableCode code{};
+                ops.add(2);
                 while (is.getbit(bit).good())
                 {
+                    ops.add(2);
                     code.push_back(bit);
                     if (code2ch.find(code) != code2ch.end()) {
+                        ops.add(3);
                         os << code2ch[code];
                         code.clear();
                     }
                 }
+                ops.add(1);
                 if (! is.eof()) {
                     // we stopped reading the file, but it is not EOF yet.
+                    ops.add(1);
                     throw std::runtime_error("Could not encode");
                 }
                 // we reached eof. all ok
@@ -627,6 +730,7 @@ int main(int argc, char **argv)
         name.erase(ext_txt, 4);
         string fout = name + ".haff";
         // encode with huffman, write name.haff
+        ops.add(4);
         ucs4_ifstream rawtext{infile};
         bit_ofstream outs{fout};
         EncodeShannon enc{};
@@ -639,6 +743,7 @@ int main(int argc, char **argv)
         name.erase(ext_txt, 4);
         string fout = name + ".shan";
         // encode with shennon, write name.shan
+        ops.add(4);
         ucs4_ifstream rawtext{infile};
         bit_ofstream outs{fout};
         EncodeShannon enc{};
@@ -651,6 +756,7 @@ int main(int argc, char **argv)
         name.erase(ext_haff, 5);
         string fout = name + "-unz-h.txt";
         // decode with huffman, write name-unz-h.txt
+        ops.add(3);
         bit_ifstream enc_stream{infile};
         ucs4_ofstream dec_stream{fout};
         Decoder dec{};
@@ -662,6 +768,7 @@ int main(int argc, char **argv)
         name.erase(ext_shan, 5);
         string fout = name + "-unz-s.txt";
         // decode with shennon, write name-unz-s.txt
+        ops.add(3);
         bit_ifstream enc_stream{infile};
         ucs4_ofstream dec_stream{fout};
         Decoder dec{};
