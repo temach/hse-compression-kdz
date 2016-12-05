@@ -2,7 +2,7 @@
 // Абрамов Артем Михайлович, группа БПИ151, 2 Dec 2016
 //
 // Development environment & project structure:
-// Platform: ArchLinux
+// Platform: ArchLinux (LITTLE-endian architecture)
 // Compiler: g++ (GCC) 6.2.1 used with std flag --std=c++11
 // Assemble tool: make
 //
@@ -16,12 +16,14 @@
 // 2) Decoder works
 // 3) UTF-8 is fully supported, even symbols outside the unicode
 //    BMP are supported
-// 4) Writing/reading of archived files is done bit by
+// 4) Files encoded on BIG-endian architectures can be safely
+//    decoded on LITTLE-endian architecture and vice versa
+// 5) Writing/reading of archived files is done bit by
 //    bit via a byte buffer
-// 5) Command line argument parser works.
-// 6) Operations are counted according to RAM model.
-// 7) The two encoders are split into separate classes
-// 8) Based on input file and algorithm flag
+// 6) Command line argument parser works.
+// 7) Operations are counted according to RAM model.
+// 8) The two encoders are split into separate classes
+// 9) Based on input file and algorithm flag
 //    output file gets correctly named.
 //
 // What is NOT done:
@@ -280,6 +282,11 @@ class bit_ifstream : public ifstream
 
         bit_ifstream& getbit(bool& bit) {
             ops.add(2);
+            if (lastbyte && nbit <= trash_size) {
+                ops.add(1);
+                setstate(ios::eofbit);
+                return *this;
+            }
             if (nbit == 0) {
                 ops.add(3);
                 get(bitbuf);
@@ -291,20 +298,8 @@ class bit_ifstream : public ifstream
                 }
             }
             // disregard the last trash_size bits in the last byte
-            if (! lastbyte) {
-                ops.add(4);
-                bit = (bitbuf & (1 << --nbit)) ? true : false;
-            } else if (lastbyte && nbit > trash_size) {
-                ops.add(4);
-                bit = (bitbuf & (1 << --nbit)) ? true : false;
-                if (nbit == 0) {
-                    ops.add(1);
-                    setstate(ios::eofbit);
-                }
-            } else {
-                ops.add(1);
-                setstate(ios::eofbit);
-            }
+            ops.add(4);
+            bit = (bitbuf & (1 << --nbit)) ? true : false;
             return *this;
         }
 
@@ -436,15 +431,11 @@ class bit_ofstream : public ofstream
             // remember the trash size
             ops.add(4);
             // write the buffer byte to be filled with data and trash
-            char trash_size = nbit;
+            char trash_size = nbit % 8;
             // write trash
             while (nbit != 8) {
                 ops.add(1);
                 putbit(false);
-            }
-            if (trash_size == 8) {
-                ops.add(1);
-                put('\0');
             }
             // rewind
             seekp(0, ios::beg);
