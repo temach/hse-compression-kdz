@@ -23,7 +23,10 @@ SRC_FILES = main.cpp
 
 
 CXX=g++
-FLAGS=-Wall -Wextra -std=c++11 -g
+# Debug Flags
+# FLAGS=-Wall -Wextra -std=c++11 -g
+# Release flags
+FLAGS=-Wall -Wextra -std=c++11 -O3
 LIBS=-lm
 
 # Take the source files basenames. (Without ".cxx" suffix)
