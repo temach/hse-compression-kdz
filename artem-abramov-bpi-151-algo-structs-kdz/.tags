@@ -1,0 +1,88 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+ALGORITHM	main.cpp	/^enum class ALGORITHM : bool$/;"	c	file:
+ArgParser	main.cpp	/^        ArgParser  (int &argc, char **argv){$/;"	f	class:ArgParser
+ArgParser	main.cpp	/^class ArgParser$/;"	c	file:
+Decode	main.cpp	/^        void Decode(bit_ifstream& is, ucs4_ofstream& os) {$/;"	f	class:ALGORITHM::Decoder
+DecodeMap	main.cpp	/^typedef std::map<VariableCode, char32_t> DecodeMap;$/;"	t	class:ALGORITHM	file:
+Decoder	main.cpp	/^class Decoder$/;"	c	class:ALGORITHM	file:
+Encode	main.cpp	/^        void Encode(ucs4_ifstream& in, bit_ofstream& out)$/;"	f	class:ALGORITHM::IEncoder
+EncodeHuffman	main.cpp	/^class EncodeHuffman : public IEncoder$/;"	c	class:ALGORITHM	file:
+EncodeHuffmanMap	main.cpp	/^typedef std::map<char32_t, VariableCode> EncodeHuffmanMap;$/;"	t	class:ALGORITHM	file:
+EncodeShannon	main.cpp	/^class EncodeShannon : public IEncoder$/;"	c	class:ALGORITHM	file:
+FillFrequencyTable	main.cpp	/^        void FillFrequencyTable(ucs4_ifstream& is) {$/;"	f	class:ALGORITHM::IEncoder
+FindBreakingIndex	main.cpp	/^        LeafIter FindBreakingIndex(LeafIter first, LeafIter last)$/;"	f	class:ALGORITHM::EncodeShannon
+FrequencyTable	main.cpp	/^typedef std::map<char32_t,uint64_t> FrequencyTable;$/;"	t	class:ALGORITHM	file:
+GenerateCodes	main.cpp	/^        void GenerateCodes()$/;"	f	class:ALGORITHM::IEncoder
+IEncoder	main.cpp	/^        IEncoder() { }$/;"	f	class:ALGORITHM::IEncoder
+IEncoder	main.cpp	/^class IEncoder$/;"	c	class:ALGORITHM	file:
+INode	main.cpp	/^        INode(uint64_t f) : f(f) {}$/;"	f	class:ALGORITHM::INode
+INode	main.cpp	/^class INode$/;"	c	class:ALGORITHM	file:
+InnerBuildTree	main.cpp	/^        NodePtr InnerBuildTree(LeafIter first, LeafIter last)$/;"	f	class:ALGORITHM::EncodeShannon
+InnerGenerateCodes	main.cpp	/^        void InnerGenerateCodes(const NodePtr node, const VariableCode& prefix)$/;"	f	class:ALGORITHM::IEncoder
+InnerReadTree	main.cpp	/^        void InnerReadTree(const VariableCode& prefix, bit_ifstream& is)$/;"	f	class:ALGORITHM::Decoder
+InnerWriteTree	main.cpp	/^        void InnerWriteTree(const NodePtr node, bit_ofstream& os)$/;"	f	class:ALGORITHM::IEncoder
+InternalNode	main.cpp	/^        InternalNode(NodePtr c0, NodePtr c1) : INode(c0->f + c1->f), left(c0), right(c1) {}$/;"	f	class:ALGORITHM::InternalNode
+InternalNode	main.cpp	/^class InternalNode : public INode$/;"	c	class:ALGORITHM	file:
+LeafIter	main.cpp	/^    typedef LeafVec::const_iterator LeafIter;$/;"	t	class:ALGORITHM::EncodeShannon	file:
+LeafNode	main.cpp	/^        LeafNode(uint64_t f, char32_t c) : INode(f), c(c) {}$/;"	f	class:ALGORITHM::LeafNode
+LeafNode	main.cpp	/^class LeafNode : public INode$/;"	c	class:ALGORITHM	file:
+LeafVec	main.cpp	/^    typedef vector<NodePtr> LeafVec;$/;"	t	class:ALGORITHM::EncodeShannon	file:
+NodeCmp	main.cpp	/^struct NodeCmp$/;"	s	class:ALGORITHM	file:
+NodePtr	main.cpp	/^typedef std::shared_ptr<INode> NodePtr;$/;"	t	class:ALGORITHM	file:
+OpsCounter	main.cpp	/^class OpsCounter$/;"	c	file:
+ReadTree	main.cpp	/^        void ReadTree(bit_ifstream& is)$/;"	f	class:ALGORITHM::Decoder
+TransformDecode	main.cpp	/^        void TransformDecode(bit_ifstream& is, ucs4_ofstream& os)$/;"	f	class:ALGORITHM::Decoder
+TransformTextEncode	main.cpp	/^        void TransformTextEncode(ucs4_ifstream& is, bit_ofstream& os)$/;"	f	class:ALGORITHM::IEncoder
+VariableCode	main.cpp	/^typedef vector<bool> VariableCode;$/;"	t	class:ALGORITHM	file:
+WriteTree	main.cpp	/^        void WriteTree(bit_ofstream& os)$/;"	f	class:ALGORITHM::IEncoder
+add	main.cpp	/^        void add(int64_t new_ops) {$/;"	f	class:OpsCounter
+bit_ifstream	main.cpp	/^        bit_ifstream(const string& fname) : ifstream(fname, ios::binary | ios::in) {$/;"	f	class:ALGORITHM::bit_ifstream
+bit_ifstream	main.cpp	/^class bit_ifstream : public ifstream$/;"	c	class:ALGORITHM	file:
+bit_ofstream	main.cpp	/^        bit_ofstream(const string& fname) : ofstream(fname, ios::binary | ios::out) {$/;"	f	class:ALGORITHM::bit_ofstream
+bit_ofstream	main.cpp	/^class bit_ofstream : public ofstream$/;"	c	class:ALGORITHM	file:
+bitbuf	main.cpp	/^        char bitbuf;$/;"	m	class:ALGORITHM::bit_ifstream	file:
+buffer	main.cpp	/^        char buffer = '\\0';$/;"	m	class:ALGORITHM::bit_ofstream	file:
+c	main.cpp	/^        const char32_t c;$/;"	m	class:ALGORITHM::LeafNode	file:
+ch2code	main.cpp	/^        EncodeHuffmanMap ch2code;$/;"	m	class:ALGORITHM::IEncoder	file:
+f	main.cpp	/^        const uint64_t f;$/;"	m	class:ALGORITHM::INode	file:
+get_option_value	main.cpp	/^        const string get_option_value(const string &option) const {$/;"	f	class:ArgParser
+getarray	main.cpp	/^        bit_ifstream& getarray(char* pbuf, int qty_bits) {$/;"	f	class:ALGORITHM::bit_ifstream
+getbit	main.cpp	/^        bit_ifstream& getbit(bool& bit) {$/;"	f	class:ALGORITHM::bit_ifstream
+getucs4	main.cpp	/^        bit_ifstream& getucs4(char32_t& ch) {$/;"	f	class:ALGORITHM::bit_ifstream
+getutf8	main.cpp	/^        bit_ifstream& getutf8(string& utf8) {$/;"	f	class:ALGORITHM::bit_ifstream
+hasbit	main.cpp	/^        bool hasbit(char ch, int i) {$/;"	f	class:ALGORITHM::bit_ifstream
+huffman	main.cpp	/^    huffman = true,$/;"	m	class:ALGORITHM	file:
+lastbyte	main.cpp	/^        bool lastbyte = false;$/;"	m	class:ALGORITHM::bit_ifstream	file:
+left	main.cpp	/^        NodePtr const left;$/;"	m	class:ALGORITHM::InternalNode	file:
+main	main.cpp	/^int main(int argc, char **argv)$/;"	f	class:ALGORITHM	file:
+nbit	main.cpp	/^        int nbit = 0;$/;"	m	class:ALGORITHM::bit_ifstream	file:
+nbit	main.cpp	/^        int nbit = 8;$/;"	m	class:ALGORITHM::bit_ofstream	file:
+operations	main.cpp	/^        uint64_t operations = 0;$/;"	m	class:OpsCounter	file:
+operator ()	main.cpp	/^    bool operator()(const NodePtr lhs, const NodePtr rhs) const {$/;"	f	struct:ALGORITHM::NodeCmp
+operator <	main.cpp	/^        friend bool operator < (const NodePtr& lhs, const NodePtr& rhs)$/;"	f	class:ALGORITHM::INode
+ops	main.cpp	/^} ops{}; \/\/ <- global variable$/;"	c	file:
+option_exists	main.cpp	/^        bool option_exists(const string &option) const{$/;"	f	class:ArgParser
+putarray	main.cpp	/^        bit_ofstream& putarray(const char* data, int qty_bits) {$/;"	f	class:ALGORITHM::bit_ofstream
+putbit	main.cpp	/^        bit_ofstream& putbit(const bool bit) {$/;"	f	class:ALGORITHM::bit_ofstream
+putchar32	main.cpp	/^        bit_ofstream& putchar32(const char32_t& ch) {$/;"	f	class:ALGORITHM::bit_ofstream
+pututf8	main.cpp	/^        bit_ofstream& pututf8(const string& utf8) {$/;"	f	class:ALGORITHM::bit_ofstream
+reset	main.cpp	/^        void reset() {$/;"	f	class:OpsCounter
+right	main.cpp	/^        NodePtr const right;$/;"	m	class:ALGORITHM::InternalNode	file:
+root	main.cpp	/^        shared_ptr<INode> root;$/;"	m	class:ALGORITHM::IEncoder	file:
+shennon	main.cpp	/^    shennon = false$/;"	m	class:ALGORITHM	file:
+start_writing	main.cpp	/^        void start_writing() {$/;"	f	class:ALGORITHM::bit_ofstream
+stop_writing	main.cpp	/^        void stop_writing() {$/;"	f	class:ALGORITHM::bit_ofstream
+table	main.cpp	/^        FrequencyTable table;$/;"	m	class:ALGORITHM::IEncoder	file:
+tokens	main.cpp	/^        vector <string> tokens;$/;"	m	class:ArgParser	file:
+trash_size	main.cpp	/^        uint8_t trash_size = 0;$/;"	m	class:ALGORITHM::bit_ifstream	file:
+ucs4_ifstream	main.cpp	/^        ucs4_ifstream(string& fname) : basic_ifstream<char32_t>(fname, ios::binary | ios::out) {$/;"	f	class:ALGORITHM::ucs4_ifstream
+ucs4_ifstream	main.cpp	/^class ucs4_ifstream : public basic_ifstream<char32_t>$/;"	c	class:ALGORITHM	file:
+ucs4_ofstream	main.cpp	/^        ucs4_ofstream(string& fname) : basic_ofstream<char32_t>(fname, ios::binary | ios::out) {$/;"	f	class:ALGORITHM::ucs4_ofstream
+ucs4_ofstream	main.cpp	/^class ucs4_ofstream : public basic_ofstream<char32_t>$/;"	c	class:ALGORITHM	file:
+ucs4conv	main.cpp	/^        wstring_convert<std::codecvt_utf8<char32_t>, char32_t> ucs4conv;$/;"	m	class:ALGORITHM::bit_ofstream	file:
+~INode	main.cpp	/^        virtual ~INode() {}$/;"	f	class:ALGORITHM::INode
